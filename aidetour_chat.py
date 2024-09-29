@@ -4,6 +4,7 @@ freeze_support()  # noqa
 
 import os
 import sys
+import signal
 import traceback
 import uuid
 import re
@@ -813,7 +814,7 @@ async def make_a_splash():
 		splash_popup.props("persistent")
 		splash_popup.classes("blur(4px)")
 		with splash_popup, ui.card().classes("w-96"):
-			ui.image("Aidetour.png").classes("w-64 h-64 mx-auto")
+			ui.image("/images/Aidetour.png").classes("w-64 h-64 mx-auto")
 			ui.label("Welcome to Aidetour Chat").classes("text-2xl font-bold text-center mt-2")
 			with ui.row().classes("justify-center mt-2"):
 				ui.spinner('grid', size='sm')
@@ -1270,19 +1271,7 @@ async def _main_page(request: Request) -> None:
 			.tooltip("Chat Settings") \
 			.props('no-caps flat fab-mini')
 
-
-			# user clicks Quit = window.close and app.shutdown:
-			async def shutdown_and_close_window():
-				# using native=True the following code removes the browser window 
-				# and shutdowns the app (i.e. python+nicegui+fastapi+uvicorn),
-				# but native=False, e.g. Chrome, this does shutdown the app, closes the 
-				# browser tab (window), but does NOT quit the browser; which may confuse users;
-				# so maybe native=True is better for users (???)
-				await ui.run_javascript('window.close();')
-				# the window and the app are 2 separate processes, duh!
-				app.shutdown()
-
-			ui.button(icon='settings_power', on_click=lambda: shutdown_and_close_window()) \
+			ui.button(icon='settings_power', on_click=app.shutdown) \
 			.tooltip("Quit") \
 			.props('no-caps flat fab-mini')
 
@@ -1592,6 +1581,7 @@ def main():
 		)
 	except Exception as e:
 		app.shutdown() # is not required but feels logical and says it all
+		sys.exit(1)
 
 
 # if __name__ in {"__main__", "__mp_main__"}:
