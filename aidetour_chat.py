@@ -199,9 +199,11 @@ def set_app_setting(key, value):
 
 def get_provider_setting(provider, key):
 	if provider in PROVIDER_DB_SETTINGS and key in PROVIDER_DB_SETTINGS[provider]:
-		return PROVIDER_DB_SETTINGS[provider][key]
+		setting = PROVIDER_DB_SETTINGS[provider][key]
+		if setting == "": setting = None
+		return setting
 	provider_defaults = next((p['defaults'] for p in PROVIDERS_SETTINGS if p['name'] == provider), {})
-	return provider_defaults.get(key, None) #"")
+	return provider_defaults.get(key, None) # "")
 
 def set_provider_setting(provider, key, value):
 	db = TinyDB('Aidetour_Chat_Settings.json')
@@ -229,6 +231,10 @@ async def aidetour_models():
 	return len(PROVIDER_MODELS["Aidetour"])
 
 async def anthropic_models():
+	provider_api_key = get_provider_setting('Anthropic', 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove("Anthropic") if "Anthropic" in PROVIDERS else None
+		return 0
 	# hardcoded coz they don't provide a 'list models' endpoint <= WHY?
 	PROVIDER_MODELS["Anthropic"] = [
 		"claude-3-5-sonnet-20240620",
@@ -239,6 +245,10 @@ async def anthropic_models():
 	return len(PROVIDER_MODELS["Anthropic"])
 
 async def perplexity_models():
+	provider_api_key = get_provider_setting('Perplexity', 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove("Perplexity") if "Perplexity" in PROVIDERS else None
+		return 0
 	# hardcoded coz they don't provide a 'list models' endpoint <= WHY?
 	PROVIDER_MODELS["Perplexity"] = [
 		"llama-3.1-70b-instruct", # context length: 131,072  
@@ -253,8 +263,12 @@ async def perplexity_models():
 
 async def groq_models():
 	try:
+		provider_api_key = get_provider_setting('Groq', 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove("Groq") if "Groq" in PROVIDERS else None
+			return 0
 		client = Groq(
-			api_key=get_provider_setting('Groq', 'api_key'), 
+			api_key=provider_api_key,
 			max_retries=0, 
 			timeout=30.0,
 		)
@@ -265,25 +279,33 @@ async def groq_models():
 		return len(PROVIDER_MODELS["Groq"])
 	except Exception as e:
 		PROVIDERS.remove("Groq") if "Groq" in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0
 
 async def google_models():
 	try:
-		genai.configure(api_key=get_provider_setting('Google', 'api_key'))
+		provider_api_key = get_provider_setting('Google', 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove("Google") if "Google" in PROVIDERS else None
+			return 0 # ignore when no api key
+		genai.configure(api_key=provider_api_key)
 		chat_models = []
-		for model in genai.list_models():
+		for model in genai.list_models(request_options={"timeout": 10}):
 			chat_models.append(model.name)
 		sorted_models = sorted(chat_models)
 		PROVIDER_MODELS["Google"] = sorted_models
 		return len(PROVIDER_MODELS["Google"])
 	except Exception as e:
 		PROVIDERS.remove("Google") if "Google" in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0
 
 async def openai_models():
 	try:
+		provider_api_key = get_provider_setting('OpenAI', 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove("OpenAI") if "OpenAI" in PROVIDERS else None
+			return 0
 		client = OpenAI(
-			api_key=get_provider_setting('OpenAI', 'api_key'),
+			api_key=provider_api_key,
 			max_retries=0, 
 			timeout=30.0,
 		)
@@ -295,11 +317,15 @@ async def openai_models():
 		return len(PROVIDER_MODELS["OpenAI"])
 	except Exception as e:
 		PROVIDERS.remove("OpenAI") if "OpenAI" in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0
 
 async def mistral_models():
 	try:
-		client = MistralClient(api_key=get_provider_setting('Mistral', 'api_key'))
+		provider_api_key = get_provider_setting('Mistral', 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove("Mistral") if "Mistral" in PROVIDERS else None
+			return 0
+		client = MistralClient(api_key=provider_api_key)
 		list_models_response = client.list_models()
 		model_ids = [model.id for model in list_models_response.data]
 		sorted_models = sorted(model_ids)
@@ -307,13 +333,17 @@ async def mistral_models():
 		return len(PROVIDER_MODELS["Mistral"])
 	except Exception as e:
 		PROVIDERS.remove("Mistral") if "Mistral" in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0
 
 async def openrouter_models():
 	try:
+		provider_api_key = get_provider_setting('OpenRouter', 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove("OpenRouter") if "OpenRouter" in PROVIDERS else None
+			return 0
 		client = OpenAI(
 			base_url="https://openrouter.ai/api/v1",
-			api_key=get_provider_setting('OpenRouter', 'api_key'), 
+			api_key=provider_api_key,
 			max_retries=0,
 			timeout=30.0
 		)
@@ -324,15 +354,16 @@ async def openrouter_models():
 		return len(PROVIDER_MODELS["OpenRouter"])
 	except Exception as e:
 		PROVIDERS.remove("OpenRouter") if "OpenRouter" in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0
 
 async def lm_studio_models():
 	global PROVIDER_MODELS
 	try:
+		# api_key isn't required, so try to connect = very fast
 		client = OpenAI(base_url="http://localhost:5506/v1", 
 			api_key="lm-studio", 
 			max_retries=0, 
-			timeout=60.0
+			timeout=10
 		)
 		models = client.models.list()
 		chat_models = [model.id for model in models.data if model.id]
@@ -346,6 +377,7 @@ async def lm_studio_models():
 async def ollama_models():
 	global PROVIDERS
 	try:
+		# api_key isn't required, so try to connect = very fast
 		data = ollama.list()
 		chat_models = [model['name'] for model in data['models']]
 		# usually too few to bother sorting them
@@ -1364,6 +1396,10 @@ async def _main_page(request: Request) -> None:
 		task.add_done_callback(on_loading_models_complete)
 		# because of nicegui's webserver-ness(fastapi/uvicorn); let's remember we splashed already:
 		SPLASHED = True
+
+	if len(PROVIDERS) - 1 <= 0:
+		ui.notify('No providers discovered, please click on Settings to add provider API keys!')
+
 
 	async def chat_settings_dialog():
 		global CURRENT_PRIMARY_COLOR
