@@ -1293,12 +1293,12 @@ async def _main_page(request: Request) -> None:
 
 			with ui.element():
 				dark_button = ui.button(icon='dark_mode', on_click=lambda: [DARKNESS.set_value(True), update_tooltip(dark_button, 'be Dark')]) \
-					.props('flat fab-mini').tooltip('go Dark').bind_visibility_from(DARKNESS, 'value', value=False)
+					.props('flat fab-mini').tooltip('be Dark').bind_visibility_from(DARKNESS, 'value', value=False)
 				light_button = ui.button(icon='light_mode', on_click=lambda: [DARKNESS.set_value(False), update_tooltip(light_button, 'be Light')]) \
-					.props('flat fab-mini').tooltip('go Light').bind_visibility_from(DARKNESS, 'value', value=True)
+					.props('flat fab-mini').tooltip('be Light').bind_visibility_from(DARKNESS, 'value', value=True)
 
 			chat_settings = ui.button(icon='settings', on_click=lambda: chat_settings_dialog()) \
-			.tooltip("Chat Settings") \
+			.tooltip("Chat    Settings") \
 			.props('no-caps flat fab-mini')
 
 			ui.button(icon='settings_power', on_click=app.shutdown) \
@@ -1326,31 +1326,32 @@ async def _main_page(request: Request) -> None:
 		)
 		ui.separator().props("size=4px color=primary") # insinuate bottom of chat history
 
-	def check_splashed():
+	def check_splashed_and_providers():
 		if SPLASHED:
 			if len(PROVIDERS) - 1 <= 0:
 				ui.html('<style>.multi-line-notification { white-space: pre-line; }</style>')
-				ui.html('<style>#no-ai { color: white; }</style>')
 				ui.notification(
-				    '_________ No AI providers were discovered! _________ \n'
-				    'Please click on Chat Settings to add provider API keys, \n'
+				    '________________ No AI providers were discovered! ______________ \n'
+				    'Please click on Chat Settings to add/change AI provider API keys, \n'
 				    'or if you are using Ollama or LM Studio  \n'
-				    'ensure both or either are running before starting Aidetour Chat. \n'
-				    'note: Chat Settings is the gear icon in the bar below Prompt.',
+				    'ensure both/either are running before starting Aidetour Chat. \n'
+				    'note: Chat Settings is the gear icon in the button bar below.',
 				    multi_line=True,
 				    classes='multi-line-notification',
 					type='negative', 
 					close_button='⚙️ click after reading',
 					position='top',
+					# spinner=True,
 					timeout=0 # wait for user to click close_button
-				).props('id=no-ai')
+				)
 				chat_settings.props('color=negative')
+				chat_settings.tooltip('Chat 😱 Settings')
 				chat_settings.update()  # refresh the UI to reflect changes
 
 			splash_timer.cancel()
 
 	# await asyncio.sleep(3)
-	splash_timer = ui.timer(2, check_splashed)
+	splash_timer = ui.timer(2, check_splashed_and_providers)
 
 	async def loading_models(i):
 		global TOTAL_MODELS, PROVIDERS
@@ -1445,8 +1446,9 @@ async def _main_page(request: Request) -> None:
 									  set_provider_setting(provider, key, convert_to_int(key_object.value, None))
 								  else:
 									  set_provider_setting(provider, key, key_object.value)
-							ui.notify('Settings saved!')
+							ui.notify('Settings saved, but the changes only apply after restarting Aidetour Chat.')
 							chat_settings.props('color=primary')
+							chat_settings.tooltip(f"Chat Settings")
 							chat_settings.update()  # refresh the UI to reflect changes
 
 						ui.space()
@@ -1630,8 +1632,8 @@ def main():
 			title=" ",
 			reload=False,
 			show_welcome_message=False,
-			# native=True,
-			# window_size=(WIDTH, HEIGHT),  # Using width and height retrieved from TinyDB
+			native=True,
+			window_size=(WIDTH, HEIGHT),  # Using width and height retrieved from TinyDB
 			# dark=None,
 			# show=False,
 			# frameless=True,  # Commented due to known issues
