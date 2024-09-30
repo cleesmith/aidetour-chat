@@ -562,7 +562,7 @@ async def GoogleResponseStreamer(prompt):
 		# request_options={"timeout": 30},
 		timeout = get_provider_setting('Google', 'timeout')
 		if timeout is not None:
-		    params["request_options"] = {"timeout": timeout}
+			params["request_options"] = {"timeout": timeout}
 		print(params)
 		stream = model.generate_content(
 			prompt,
@@ -590,8 +590,8 @@ async def AnthropicResponseStreamer(prompt):
 	try:
 		client = anthropic.Anthropic(
 			api_key=get_provider_setting('Anthropic', 'api_key'),
-            timeout=30,
-            max_retries=0,
+			timeout=30,
+			max_retries=0,
 		)
 		params = {
 			"messages": [{"role": "user", "content": prompt}],
@@ -877,8 +877,6 @@ async def _main_page(request: Request) -> None:
 	DARKNESS = ui.dark_mode()
 	dm = APP_DB_SETTINGS.get('dark_mode', True)
 	DARKNESS.set_value(dm)
-
-	# some_key_value = PROVIDER_DB_SETTINGS.get('your_provider', {}).get('your_provider_key', 'default_value_if_not_found')
 
 	splash, model_log, providers_models = await make_a_splash()
 	model_count = await aidetour_models()
@@ -1299,7 +1297,7 @@ async def _main_page(request: Request) -> None:
 				light_button = ui.button(icon='light_mode', on_click=lambda: [DARKNESS.set_value(False), update_tooltip(light_button, 'be Light')]) \
 					.props('flat fab-mini').tooltip('go Light').bind_visibility_from(DARKNESS, 'value', value=True)
 
-			ui.button(icon='settings', on_click=lambda: chat_settings_dialog()) \
+			chat_settings = ui.button(icon='settings', on_click=lambda: chat_settings_dialog()) \
 			.tooltip("Chat Settings") \
 			.props('no-caps flat fab-mini')
 
@@ -1328,6 +1326,31 @@ async def _main_page(request: Request) -> None:
 		)
 		ui.separator().props("size=4px color=primary") # insinuate bottom of chat history
 
+	def check_splashed():
+		if SPLASHED:
+			if len(PROVIDERS) - 1 <= 0:
+				ui.html('<style>.multi-line-notification { white-space: pre-line; }</style>')
+				ui.html('<style>#no-ai { color: white; }</style>')
+				ui.notification(
+				    '_________ No AI providers were discovered! _________ \n'
+				    'Please click on Chat Settings to add provider API keys, \n'
+				    'or if you are using Ollama or LM Studio  \n'
+				    'ensure both or either are running before starting Aidetour Chat. \n'
+				    'note: Chat Settings is the gear icon in the bar below Prompt.',
+				    multi_line=True,
+				    classes='multi-line-notification',
+					type='negative', 
+					close_button='⚙️ click after reading',
+					position='top',
+					timeout=0 # wait for user to click close_button
+				).props('id=no-ai')
+				chat_settings.props('color=negative')
+				chat_settings.update()  # refresh the UI to reflect changes
+
+			splash_timer.cancel()
+
+	# await asyncio.sleep(3)
+	splash_timer = ui.timer(2, check_splashed)
 
 	async def loading_models(i):
 		global TOTAL_MODELS, PROVIDERS
@@ -1377,28 +1400,24 @@ async def _main_page(request: Request) -> None:
 			total_ai_models = TOTAL_MODELS - ignored
 			append_splash_text(model_log, providers_models, f"With {total_ai_models} models available from {total_ai_providers} providers.")
 			append_splash_text(model_log, providers_models, f"Enjoy!")
-			# await asyncio.sleep(2)
 			splash.close()
 			splash.clear() # removes the hidden splash ui.dialog
-			# await asyncio.sleep(2)
 
 	def on_loading_models_complete(_):
+		global SPLASHED
 		# note: the underscore above is a way of saying, 
-		# 		"I acknowledge this argument is passed, but I don't need to use it." 
-		# 		This is common in situations like callbacks where the parameter is 
-		# 		necessary syntactically but not functionally required in the callback logic.
+		#       "I acknowledge this argument is passed, but I don't need to use it." 
+		#       This is common in situations like callbacks where the parameter is 
+		#       necessary syntactically but not functionally required in the callback logic.
 		provider_select.options = PROVIDERS  # update the options in the select element
 		provider_select.props(f'label="{len(PROVIDERS) - 1} Providers:"')
 		provider_select.update()  # refresh the UI to reflect changes
+		# because of nicegui's webserver-ness(fastapi/uvicorn); let's remember we splashed already:
+		SPLASHED = True
 
 	if not SPLASHED:
 		task = asyncio.create_task(loading_models(1))
 		task.add_done_callback(on_loading_models_complete)
-		# because of nicegui's webserver-ness(fastapi/uvicorn); let's remember we splashed already:
-		SPLASHED = True
-
-	if len(PROVIDERS) - 1 <= 0:
-		ui.notify('No providers discovered, please click on Settings to add provider API keys!')
 
 
 	async def chat_settings_dialog():
@@ -1422,11 +1441,13 @@ async def _main_page(request: Request) -> None:
 							set_app_setting('primary_color', primary_color)
 							for provider, inputs in provider_inputs.items():
 							  for key, key_object in inputs.items():
-							      if key == 'timeout':
-							          set_provider_setting(provider, key, convert_to_int(key_object.value, None))
-							      else:
-							          set_provider_setting(provider, key, key_object.value)
+								  if key == 'timeout':
+									  set_provider_setting(provider, key, convert_to_int(key_object.value, None))
+								  else:
+									  set_provider_setting(provider, key, key_object.value)
 							ui.notify('Settings saved!')
+							chat_settings.props('color=primary')
+							chat_settings.update()  # refresh the UI to reflect changes
 
 						ui.space()
 						ui.button(icon='save_as', on_click=lambda: save_settings(
@@ -1604,16 +1625,16 @@ def main():
 		HEIGHT = get_app_setting('window_height')
 
 		ui.run(
-		    host=HOST,
-		    port=PORT,
-		    title=" ",
-		    reload=False,
-		    show_welcome_message=False,
-		    native=True,
-		    window_size=(WIDTH, HEIGHT),  # Using width and height retrieved from TinyDB
-		    # dark=None,
-		    # show=False,
-		    # frameless=True,  # Commented due to known issues
+			host=HOST,
+			port=PORT,
+			title=" ",
+			reload=False,
+			show_welcome_message=False,
+			# native=True,
+			# window_size=(WIDTH, HEIGHT),  # Using width and height retrieved from TinyDB
+			# dark=None,
+			# show=False,
+			# frameless=True,  # Commented due to known issues
 		)
 	except Exception as e:
 		app.shutdown() # is not required but feels logical and says it all
