@@ -563,7 +563,6 @@ async def GoogleResponseStreamer(prompt):
 		timeout = get_provider_setting('Google', 'timeout')
 		if timeout is not None:
 			params["request_options"] = {"timeout": timeout}
-		print(params)
 		stream = model.generate_content(
 			prompt,
 			stream=True,
