@@ -79,6 +79,15 @@ try:
 except PackageNotFoundError:
 	pipv = 'unknown'
 
+APP_FOLDER_NAME = "aidetour_app"
+# while different for each OS, expanduser('~') works for all, 
+# so let's use it as the default for: settings, logs, chat history
+# and just in case a new folder can't be created:
+USER_HOME_PATH = os.path.expanduser('~')
+APP_HOME_PATH = USER_HOME_PATH
+
+SETTINGS_FILE = 'Aidetour_Chat_Settings.json'
+SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
 
 HOST = '127.0.0.1' # note: using 'localhost' prioritizes IPv6, so IP = ::1, well on macOS
 PORT = 8000
@@ -148,7 +157,6 @@ app.native.settings['ALLOW_DOWNLOADS'] = True
 app.native.window_args["text_select"] = True # allows user to hand select text
 app.native.window_args["easy_drag"] = False
 
-
 def set_abort(value):
 	global ABORT
 	ABORT = value
@@ -161,9 +169,23 @@ def convert_to_int(s: str, default: int) -> int:
 	except Exception:
 		return default
 
+def set_app_home_path():
+	global APP_HOME_PATH, SETTINGS_FILE_PATH
+	# note: these globals were already set to default, worst case, settings
+	try:
+		app_folder = os.path.join(USER_HOME_PATH, APP_FOLDER_NAME)
+		# try to create the app folder if it doesn't exist
+		if not os.path.exists(app_folder):
+			os.makedirs(app_folder)
+		APP_HOME_PATH = app_folder
+		SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
+	except Exception as e:
+		print(f"Warning: Unable to create folder '{app_folder}'. Reason:\n{e}")
+		print(f"Output will be written directly to the user's home folder '{USER_HOME_PATH}' instead.")
+
 def read_settings_from_db():
 	global APP_DB_SETTINGS, PROVIDER_DB_SETTINGS
-	db = TinyDB('Aidetour_Chat_Settings.json')
+	db = TinyDB(SETTINGS_FILE_PATH)
 	all_docs = db.all()
 	APP_DB_SETTINGS = {}
 	PROVIDER_DB_SETTINGS = defaultdict(dict)
@@ -189,7 +211,7 @@ def get_app_setting(key):
 	return default_values.get(key, "")
 
 def set_app_setting(key, value):
-	db = TinyDB('Aidetour_Chat_Settings.json')
+	db = TinyDB(SETTINGS_FILE_PATH)
 	Settings = Query()
 	if db.search((Settings.type == 'app_setting') & (Settings.key == key)):
 		db.update({'value': value}, (Settings.type == 'app_setting') & (Settings.key == key))
@@ -206,7 +228,7 @@ def get_provider_setting(provider, key):
 	return provider_defaults.get(key, None) # "")
 
 def set_provider_setting(provider, key, value):
-	db = TinyDB('Aidetour_Chat_Settings.json')
+	db = TinyDB(SETTINGS_FILE_PATH)
 	Settings = Query()
 	if db.search((Settings.type == 'provider_setting') & (Settings.provider == provider) & (Settings.key == key)):
 		db.update({'value': value}, (Settings.type == 'provider_setting') & (Settings.provider == provider) & (Settings.key == key))
@@ -1330,15 +1352,15 @@ async def _main_page(request: Request) -> None:
 			if len(PROVIDERS) - 1 <= 0:
 				ui.html('<style>.multi-line-notification { white-space: pre-line; }</style>')
 				ui.notification(
-				    '________________ No AI providers were discovered! ______________ \n'
-				    'Please click on Chat Settings to add/change AI provider API keys, \n'
-				    'or if you are using Ollama or LM Studio  \n'
-				    'ensure both/either are running before starting Aidetour Chat. \n'
-				    'note: Chat Settings is the gear icon in the button bar below.',
-				    multi_line=True,
-				    classes='multi-line-notification',
+					'________________ No AI providers were discovered! ______________ \n'
+					'Please click on Chat Settings to add/change AI provider API keys, \n'
+					'or if you are using Ollama or LM Studio  \n'
+					'ensure both/either are running before starting Aidetour Chat. \n'
+					'Chat Settings is the gear icon in the button bar below.',
+					multi_line=True,
+					classes='multi-line-notification',
 					type='negative', 
-					close_button='⚙️ click after reading',
+					close_button="↙️ click red gear to fix",
 					position='top',
 					# spinner=True,
 					timeout=0 # wait for user to click close_button
@@ -1617,6 +1639,8 @@ async def _main_page(request: Request) -> None:
 def main():
 	try:
 		# app.on_startup(startup)
+
+		set_app_home_path()
 
 		read_settings_from_db()
 
