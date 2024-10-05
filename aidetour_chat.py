@@ -3,6 +3,8 @@ freeze_support()  # noqa
 # the above is related to macOS packaging, see:
 # Package for Installation in NiceGUI's doc's at
 # https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
+# ... and:
+# https://cx-freeze.readthedocs.io/en/stable/faq.html#multiprocessing-support
 
 import os
 import sys
@@ -27,7 +29,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response
 from starlette.responses import RedirectResponse
 
-from nicegui import app, ui, native
+from nicegui import app, ui, native, functions
 from nicegui import __version__ as nv
 import webview # pip install pywebview
 
@@ -57,7 +59,8 @@ from groq import __version__ as gv
 
 from importlib.metadata import version, PackageNotFoundError
 
-sys.stdout = open('logs.txt', 'w') # nicegui's packaging suggestion
+# sys.stdout = open('logs.txt', 'w') # nicegui's packaging suggestion
+sys.stdout = open(os.devnull, 'w')
 
 try:
 	mv = version('mistralai')
@@ -1737,6 +1740,13 @@ def main():
 
 # if __name__ in {"__main__", "__mp_main__"}:
 if __name__ == '__main__':
+	freeze_support()  # noqa
+	# the above is related to macOS packaging, see:
+	# Package for Installation in NiceGUI's doc's at
+	# https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
+	# ... and:
+	# https://cx-freeze.readthedocs.io/en/stable/faq.html#multiprocessing-support
+
 	# the following works for 'native=True' mode, as 
 	# this code is trying to be more like a desktop app 
 	# with only a single user (a personal server) with 
@@ -1759,8 +1769,7 @@ if __name__ == '__main__':
 	if running:
 		sys.exit(1)
 
-	print("if __name__ == '__main__':")
-	print(f"os.environ:\n{os.environ}")
+	# print(f"os.environ:\n{os.environ}")
 
 	# notes: 
 	# in the following main guard:

@@ -1,6 +1,5 @@
 cls_*
 logs*
-setup.py
 *.json
 printenv*
 Aidetour_Settings.json
