@@ -1,3 +1,4 @@
+build/
 cls_*
 logs*
 *.json
