@@ -1,6 +1,8 @@
 from multiprocessing import freeze_support  # noqa
-
 freeze_support()  # noqa
+# the above is related to macOS packaging, see:
+# Package for Installation in NiceGUI's doc's at
+# https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
 
 import os
 import sys
@@ -25,7 +27,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response
 from starlette.responses import RedirectResponse
 
-from nicegui import app, ui
+from nicegui import app, ui, native
 from nicegui import __version__ as nv
 import webview # pip install pywebview
 
@@ -54,6 +56,9 @@ from groq import __version__ as gv
 # from ollama import __version__ as ov
 
 from importlib.metadata import version, PackageNotFoundError
+
+sys.stdout = open('logs.txt', 'w') # nicegui's packaging suggestion
+
 try:
 	mv = version('mistralai')
 except PackageNotFoundError:
@@ -146,7 +151,57 @@ PROVIDER_DB_SETTINGS = defaultdict(dict)
 #           @ui.page('/', response_timeout=999)
 #           async def _main_page(request: Request) -> None:
 
-app.add_static_files('/images', 'images')
+# try:
+# 	app.add_static_files('/images', 'images')
+# except Exception as e:
+# 	# app.shutdown() # is not required but feels logical and says it all
+# 	sys.exit(1)
+
+
+# # determine if running from a packaged environment (e.g., PyInstaller or nicegui-pack)
+# if getattr(sys, 'frozen', False):
+#     # if packaged, use the path relative to the executable
+#     current_dir = os.path.dirname(sys.executable)
+#     images_path = os.path.join(current_dir, '_internal', 'images')
+# else:
+#     # if running in a development environment (non-packaged)
+#     current_dir = os.path.dirname(os.path.abspath(__file__))
+#     images_path = os.path.join(current_dir, 'images')
+
+# try:
+#     app.add_static_files('/images', images_path)
+# except Exception as e:
+#     sys.exit(1)
+
+
+# # determine if running from a packaged environment
+# if getattr(sys, 'frozen', False):
+#     # packaged environment (PyInstaller or similar)
+#     base_path = sys._MEIPASS  # This points to the temp folder with bundled files
+#     images_path = os.path.join(base_path, 'images')
+# else:
+#     # development environment (non-packaged)
+#     base_path = os.path.dirname(os.path.abspath(__file__))
+#     images_path = os.path.join(base_path, 'images')
+
+
+if getattr(sys, 'frozen', False):
+    # Running in a bundle created by cx_Freeze
+    base_path = os.path.dirname(sys.executable)
+    images_path = os.path.join(base_path, 'images')
+else:
+    # Running in a development environment
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    images_path = os.path.join(base_path, 'images')
+
+
+try:
+    app.add_static_files('/images', images_path)
+except Exception as e:
+    sys.exit(1)
+
+
+
 app.native.settings['ALLOW_DOWNLOADS'] = True
 
 # app.native.window_args["title"] = f"Aidetour Chat on http://{HOST}:{PORT}"
@@ -171,30 +226,34 @@ def convert_to_int(s: str, default: int) -> int:
 
 def set_app_home_path():
 	global APP_HOME_PATH, SETTINGS_FILE_PATH
-	# note: these globals were already set to default, worst case, settings
+	# note: these globals were already set to default (the worst case) settings
 	try:
 		app_folder = os.path.join(USER_HOME_PATH, APP_FOLDER_NAME)
-		# try to create the app folder if it doesn't exist
+		# try to create the desired app folder if it doesn't exist
 		if not os.path.exists(app_folder):
 			os.makedirs(app_folder)
 		APP_HOME_PATH = app_folder
 		SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
 	except Exception as e:
-		print(f"Warning: Unable to create folder '{app_folder}'. Reason:\n{e}")
-		print(f"Output will be written directly to the user's home folder '{USER_HOME_PATH}' instead.")
+		# print(f"Warning: Unable to create folder '{app_folder}'. Reason:\n{e}")
+		# print(f"Output will be written directly to the user's home folder '{USER_HOME_PATH}' instead.")
+		pass
 
 def read_settings_from_db():
 	global APP_DB_SETTINGS, PROVIDER_DB_SETTINGS
-	db = TinyDB(SETTINGS_FILE_PATH)
-	all_docs = db.all()
-	APP_DB_SETTINGS = {}
-	PROVIDER_DB_SETTINGS = defaultdict(dict)
-	for doc in all_docs:
-		if doc['type'] == 'app_setting':
-			APP_DB_SETTINGS[doc['key']] = doc['value']
-		elif doc['type'] == 'provider_setting':
-			PROVIDER_DB_SETTINGS[doc['provider']][doc['key']] = doc['value']
-	db.close()
+	try:
+		db = TinyDB(SETTINGS_FILE_PATH)
+		all_docs = db.all()
+		APP_DB_SETTINGS = {}
+		PROVIDER_DB_SETTINGS = defaultdict(dict)
+		for doc in all_docs:
+			if doc['type'] == 'app_setting':
+				APP_DB_SETTINGS[doc['key']] = doc['value']
+			elif doc['type'] == 'provider_setting':
+				PROVIDER_DB_SETTINGS[doc['provider']][doc['key']] = doc['value']
+		db.close()
+	except Exception as e:
+		pass
 
 def get_app_setting(key):
 	default_values = {
@@ -1322,7 +1381,13 @@ async def _main_page(request: Request) -> None:
 			.tooltip("Chat    Settings") \
 			.props('no-caps flat fab-mini')
 
-			ui.button(icon='settings_power', on_click=app.shutdown) \
+			async def app_quit():
+				app.shutdown() # is not required but feels logical and says it all
+				await asyncio.sleep(3)
+				# sys.exit(1)
+				os._exit(0)
+
+			ui.button(icon='settings_power', on_click=app_quit) \
 			.tooltip("Quit") \
 			.props('no-caps flat fab-mini')
 
@@ -1652,6 +1717,9 @@ def main():
 		ui.run(
 			host=HOST,
 			port=PORT,
+			# 'title' does not work correctly on Macbook Pro M3 Max with macOS: Sequoia 15.0, 
+			# as the title is displayed twice, and the same for:
+			# app.native.window_args["title"] = "Aidetour Chat"
 			title=" ",
 			reload=False,
 			show_welcome_message=False,
@@ -1663,7 +1731,8 @@ def main():
 		)
 	except Exception as e:
 		app.shutdown() # is not required but feels logical and says it all
-		sys.exit(1)
+		# sys.exit(1)
+		os._exit() # closes terminal
 
 
 # if __name__ in {"__main__", "__mp_main__"}:
@@ -1689,6 +1758,9 @@ if __name__ == '__main__':
 		pass
 	if running:
 		sys.exit(1)
+
+	print("if __name__ == '__main__':")
+	print(f"os.environ:\n{os.environ}")
 
 	# notes: 
 	# in the following main guard:
