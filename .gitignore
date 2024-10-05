@@ -1,6 +1,6 @@
 *.dmg
 build/
-build_works/
+build_works*/
 cls_*
 logs*
 *.json
