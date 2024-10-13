@@ -1,10 +1,11 @@
-from multiprocessing import freeze_support  # noqa
-freeze_support()  # noqa
+# macOS packaging support: 
+import platform
+if platform.system() == "Darwin":
+    from multiprocessing import freeze_support  # noqa
+    freeze_support()  # noqa
 # the above is related to macOS packaging, see:
 # Package for Installation in NiceGUI's doc's at
 # https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
-# ... and:
-# https://cx-freeze.readthedocs.io/en/stable/faq.html#multiprocessing-support
 
 import os
 import sys
@@ -29,9 +30,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response
 from starlette.responses import RedirectResponse
 
-from nicegui import app, ui, native, functions
+from nicegui import app, ui, run
 from nicegui import __version__ as nv
-import webview # pip install pywebview
+# import webview # pip install pywebview
 
 from openai import OpenAI
 
@@ -60,32 +61,9 @@ from groq import __version__ as gv
 from importlib.metadata import version, PackageNotFoundError
 
 # sys.stdout = open('logs.txt', 'w') # nicegui's packaging suggestion
-sys.stdout = open(os.devnull, 'w')
-
-try:
-	mv = version('mistralai')
-except PackageNotFoundError:
-	mv = 'unknown'
-try:
-	ov = version('ollama')
-except PackageNotFoundError:
-	ov = 'unknown'
-try:
-	pwv = version('pywebview')
-except PackageNotFoundError:
-	pwv = 'unknown'
-try:
-	uvv = version('uvicorn')
-except PackageNotFoundError:
-	uvv = 'unknown'
-try:
-	fav = version('fastapi')
-except PackageNotFoundError:
-	fav = 'unknown'
-try:
-	pipv = version('pip')
-except PackageNotFoundError:
-	pipv = 'unknown'
+# sys.stdout = open(os.devnull, 'w')
+# Windows: deal with emoji's and "UnicodeEncodeError: 'charmap' codec can't encode character..."
+# sys.stdout.reconfigure(encoding='utf-8')
 
 APP_FOLDER_NAME = "aidetour_app"
 # while different for each OS, expanduser('~') works for all, 
@@ -97,7 +75,39 @@ APP_HOME_PATH = USER_HOME_PATH
 SETTINGS_FILE = 'Aidetour_Chat_Settings.json'
 SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
 
-HOST = '127.0.0.1' # note: using 'localhost' prioritizes IPv6, so IP = ::1, well on macOS
+# determine where the images are:
+if getattr(sys, 'frozen', False):
+    # packaged environment (PyInstaller or similar)
+    base_path = sys._MEIPASS  # points to the temp folder with bundled files
+else:
+    # development environment (non-packaged)
+    base_path = os.path.dirname(os.path.abspath(__file__))
+images_path = os.path.join(base_path, 'images')
+try:
+	app.add_static_files('/images', images_path)
+except Exception as e:
+	print(f"ERROR: can't add_static_files: /images: e:\n{e}")
+	sys.exit(1)
+
+# determine the directory for storing app/user data:
+try:
+	if sys.platform == "win32":
+	    # Windows: use the local application data directory
+	    aidetour_app = os.getenv('LOCALAPPDATA', os.path.expanduser('~'))
+	    aidetour_app = os.path.join(aidetour_app, APP_FOLDER_NAME)
+	else:
+	    # Linux and macOS: use the user's home directory = ~/.aidetour_app
+	    aidetour_app = os.path.join(os.path.expanduser('~'), '.aidetour_app')
+	# create new or use existing dir/folder:
+	os.makedirs(aidetour_app, exist_ok=True)
+	log_path = os.path.join(aidetour_app, 'logs.txt')
+	sys.stdout = open(log_path, 'w') # nicegui's packaging suggestion
+except Exception as e:
+	print(f"ERROR: can't setup ~/.aidetour_app dir/folder: e:\n{e}")
+	sys.exit(1)
+
+# using 'localhost' prioritizes IPv6, so IP = ::1, well on macOS
+HOST = '127.0.0.1' 
 PORT = 8000
 WIDTH = 810
 HEIGHT = 840
@@ -109,6 +119,7 @@ THINKING_LABEL = None
 ABORT_STREAM = None
 ABORT = False
 MESSAGE_CONTAINER = None
+SPLASH_DIALOG = None
 SPLASHED = False
 TOTAL_MODELS = 0
 PROVIDER = ""
@@ -147,72 +158,37 @@ PROVIDERS_SETTINGS = [
 APP_DB_SETTINGS = {}
 PROVIDER_DB_SETTINGS = defaultdict(dict)
 
-# notes: these 'app.' settings don't work: 
-#   1.  just before or after 'ui.run'
-#   2.  nor in: main()
-#   3.  nor in:
-#           @ui.page('/', response_timeout=999)
-#           async def _main_page(request: Request) -> None:
-
-# try:
-# 	app.add_static_files('/images', 'images')
-# except Exception as e:
-# 	# app.shutdown() # is not required but feels logical and says it all
-# 	sys.exit(1)
-
-
-# # determine if running from a packaged environment (e.g., PyInstaller or nicegui-pack)
-# if getattr(sys, 'frozen', False):
-#     # if packaged, use the path relative to the executable
-#     current_dir = os.path.dirname(sys.executable)
-#     images_path = os.path.join(current_dir, '_internal', 'images')
-# else:
-#     # if running in a development environment (non-packaged)
-#     current_dir = os.path.dirname(os.path.abspath(__file__))
-#     images_path = os.path.join(current_dir, 'images')
-
-# try:
-#     app.add_static_files('/images', images_path)
-# except Exception as e:
-#     sys.exit(1)
-
-
-# # determine if running from a packaged environment
-# if getattr(sys, 'frozen', False):
-#     # packaged environment (PyInstaller or similar)
-#     base_path = sys._MEIPASS  # This points to the temp folder with bundled files
-#     images_path = os.path.join(base_path, 'images')
-# else:
-#     # development environment (non-packaged)
-#     base_path = os.path.dirname(os.path.abspath(__file__))
-#     images_path = os.path.join(base_path, 'images')
-
-
-if getattr(sys, 'frozen', False):
-    # Running in a bundle created by cx_Freeze
-    base_path = os.path.dirname(sys.executable)
-    images_path = os.path.join(base_path, 'images')
-else:
-    # Running in a development environment
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    images_path = os.path.join(base_path, 'images')
-
-
 try:
-    app.add_static_files('/images', images_path)
-except Exception as e:
-    sys.exit(1)
+	mv = version('mistralai')
+except PackageNotFoundError:
+	mv = 'unknown'
+try:
+	ov = version('ollama')
+except PackageNotFoundError:
+	ov = 'unknown'
+try:
+	pwv = version('pywebview')
+except PackageNotFoundError:
+	pwv = 'unknown'
+try:
+	uvv = version('uvicorn')
+except PackageNotFoundError:
+	uvv = 'unknown'
+try:
+	fav = version('fastapi')
+except PackageNotFoundError:
+	fav = 'unknown'
+try:
+	pipv = version('pip')
+except PackageNotFoundError:
+	pipv = 'unknown'
 
-
-
-app.native.settings['ALLOW_DOWNLOADS'] = True
-
-# app.native.window_args["title"] = f"Aidetour Chat on http://{HOST}:{PORT}"
-
-# see: https://pywebview.flowrl.com/guide/api.html#webview-create-window
-# and: https://developer.mozilla.org/en-US/docs/Web/CSS/user-select
-# allows text selection with mouse/pad, but not using: native=True:
-app.native.window_args["text_select"] = True # allows user to hand select text
+# app.native.settings['ALLOW_DOWNLOADS'] = True
+# # app.native.window_args["title"] = f"Aidetour Chat on http://{HOST}:{PORT}"
+# # see: https://pywebview.flowrl.com/guide/api.html#webview-create-window
+# # and: https://developer.mozilla.org/en-US/docs/Web/CSS/user-select
+# # allows text selection with mouse/pad, but not using: native=True:
+app.native.window_args["text_select"] = True # allows user to hand/mouse select text
 app.native.window_args["easy_drag"] = False
 
 def set_abort(value):
@@ -444,7 +420,8 @@ async def lm_studio_models():
 	global PROVIDER_MODELS
 	try:
 		# api_key isn't required, so try to connect = very fast
-		client = OpenAI(base_url="http://localhost:5506/v1", 
+		client = OpenAI(
+			base_url="http://localhost:5506/v1", 
 			api_key="lm-studio", 
 			max_retries=0, 
 			timeout=10
@@ -459,18 +436,33 @@ async def lm_studio_models():
 		return 0 # isn't running which is ok
 
 async def ollama_models():
-	global PROVIDERS
+	global PROVIDER_MODELS, PROVIDERS
+	is_up = False
 	try:
-		# api_key isn't required, so try to connect = very fast
-		data = ollama.list()
-		chat_models = [model['name'] for model in data['models']]
-		# usually too few to bother sorting them
-		PROVIDER_MODELS["Ollama"] = chat_models
-		return len(PROVIDER_MODELS["Ollama"])
+		is_up = httpx.get("http://localhost:11434/v1/models", timeout=20).status_code == 200
+	except Exception:
+		is_up = False
+	if not is_up:
+		PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
+		return 0
+	try:
+		client = OpenAI(
+			base_url="http://localhost:11434/v1",
+			api_key="ollama",
+			timeout=10,
+			max_retries=0
+		)
+		try:
+			models = client.models.list()
+			chat_models = [model.id for model in models.data if model.id]
+			PROVIDER_MODELS["Ollama"] = chat_models
+			return len(PROVIDER_MODELS["Ollama"])
+		except Exception as e:
+			PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
+			return 0
 	except Exception as e:
 		PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
-		return 0 # isn't running which is ok
-
+		return 0
 
 # *********************************
 # model streamers for each provider:
@@ -946,6 +938,7 @@ async def _main_page(request: Request) -> None:
 	global SEND_BUTTON, THINKING_LABEL, TEMP
 	global SPLASHED, PROVIDER, MODEL, TOTAL_MODELS, provider_select
 	global APP_DB_SETTINGS, PROVIDER_DB_SETTINGS
+	global SPLASH_DIALOG
 
 	if ACTIVE_SESSION:
 		return RedirectResponse('/busy')
@@ -961,7 +954,7 @@ async def _main_page(request: Request) -> None:
 	dm = APP_DB_SETTINGS.get('dark_mode', True)
 	DARKNESS.set_value(dm)
 
-	splash, model_log, providers_models = await make_a_splash()
+	SPLASH_DIALOG, model_log, providers_models = await make_a_splash()
 	model_count = await aidetour_models()
 
 	PROVIDER = "Aidetour"
@@ -1055,60 +1048,32 @@ async def _main_page(request: Request) -> None:
 		MESSAGE_CONTAINER.clear()
 		CHAT_HISTORY = ""
 
-	# async def save_chat(text) -> None:
-	# 	text = await ui.run_javascript(f"getElement({MESSAGE_CONTAINER.id}).innerText")
-	# 	filename = await app.native.main_window.create_file_dialog(
-	# 		dialog_type=webview.SAVE_DIALOG,
-	# 		allow_multiple=False, 
-	# 		file_types=("Text file (*.txt)",), 
-	# 		save_filename="aidetour_chat_history.txt",
-	# 	)
-	# 	if filename is not None:
-	# 		try:
-	# 			with open(filename, "w") as f:
-	# 				filtered_lines = (
-	# 					re.sub(r"\*\*|##|###", "", line).strip() 
-	# 					for line in text.splitlines() 
-	# 					if re.sub(r"\*\*|##|###", "", line).strip() != "content_paste"
-	# 				)
-	# 				text_without_markdown_and_content_paste = "\n".join(filtered_lines)
-	# 				f.write(text_without_markdown_and_content_paste)
-	# 				ui.notify("Chat history saved.")
-	# 		except Exception as e:
-	# 			ui.notify(f"Error saving file: {e}")
-	# 	else:
-	# 		ui.notify("Filename is unknown/none, so unable file save!")
-
 	async def save_chat(text) -> None:
-	    text = await ui.run_javascript(f"getElement({MESSAGE_CONTAINER.id}).innerText")
-	    filename = await app.native.main_window.create_file_dialog(
-	        dialog_type=webview.SAVE_DIALOG,
-	        allow_multiple=False, 
-	        file_types=("Text file (*.txt)",), 
-	        save_filename="aidetour_chat_history.txt",
-	    )
-	    
-	    if filename is not None:
-	        if isinstance(filename, tuple):
-	            filename = filename[0]
-	        if not filename.endswith(".txt"):
-	            filename += ".txt"
-
-	        try:
-	            with open(filename, "w", encoding="utf-8") as f:
-	                filtered_lines = (
-	                    re.sub(r"\*\*|##|###", "", line).strip() 
-	                    for line in text.splitlines() 
-	                    if re.sub(r"\*\*|##|###", "", line).strip() != "content_paste"
-	                )
-	                text_without_markdown_and_content_paste = "\n".join(filtered_lines)
-	                f.write(text_without_markdown_and_content_paste)
-	                ui.notify("Chat history saved.")
-	        except Exception as e:
-	            ui.notify(f"Error saving file: {e}")
-	    else:
-	        ui.notify("Filename is unknown/none, so unable to save file!")
-
+		return
+		# text = await ui.run_javascript(f"getElement({MESSAGE_CONTAINER.id}).innerText")
+		# filename = await app.native.main_window.create_file_dialog(
+		# 	dialog_type=webview.SAVE_DIALOG,
+		# 	allow_multiple=False, 
+		# 	file_types=("Text file (*.txt)",), 
+		# 	save_filename="aidetour_chat_history.txt",
+		# )
+		# if filename is not None:
+		# 	try:
+		# 		# utf-8 otherwise Windows errors:
+		# 		with open(filename, "w", encoding='utf-8') as f:
+		# 			filtered_lines = (
+		# 				re.sub(r"\*\*|##|###", "", line).strip() 
+		# 				for line in text.splitlines() 
+		# 				if re.sub(r"\*\*|##|###", "", line).strip() != "content_paste"
+		# 			)
+		# 			text_without_markdown_and_content_paste = "\n".join(filtered_lines)
+		# 			f.write(text_without_markdown_and_content_paste)
+		# 			ui.notify("Chat history saved.")
+		# 	except Exception as e:
+		# 		print(f"\nsave_chat e:\n{e}\ntext_without_markdown_and_content_paste:\n{text_without_markdown_and_content_paste}\n")
+		# 		ui.notify(f"Error saving file: {e}")
+		# else:
+		# 	ui.notify("Filename is unknown/none, so unable file save!")
 
 	async def send() -> None:
 		global CHAT_HISTORY, SEND_BUTTON, THINKING_LABEL
@@ -1416,6 +1381,8 @@ async def _main_page(request: Request) -> None:
 			.props('no-caps flat fab-mini')
 
 			async def app_quit():
+				ui.notify("shutting down, standby...")
+				await asyncio.sleep(3)
 				app.shutdown() # is not required but feels logical and says it all
 				await asyncio.sleep(3)
 				# sys.exit(1)
@@ -1472,73 +1439,6 @@ async def _main_page(request: Request) -> None:
 
 	# await asyncio.sleep(3)
 	splash_timer = ui.timer(2, check_splashed_and_providers)
-
-	async def loading_models(i):
-		global TOTAL_MODELS, PROVIDERS
-		# Let's intentionally slow down the following operations.
-		# For some providers, these actions happen too quickly to be noticed in the splash popup.
-		if i > 0:
-			append_splash_text(model_log, providers_models, f'Creating a list of AI models for each provider...')
-			await asyncio.sleep(0.03)
-			model_count = await anthropic_models()
-			append_splash_text(model_log, providers_models, f"Anthropic offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await google_models()
-			append_splash_text(model_log, providers_models, f"Google offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await groq_models()
-			append_splash_text(model_log, providers_models, f"Groq offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await lm_studio_models()
-			append_splash_text(model_log, providers_models, f"LM Studio offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await mistral_models()
-			append_splash_text(model_log, providers_models, f"Mistral offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await ollama_models()
-			append_splash_text(model_log, providers_models, f"Ollama offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await openai_models()
-			append_splash_text(model_log, providers_models, f"OpenAI offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await perplexity_models()
-			append_splash_text(model_log, providers_models, f"Perplexity offers {model_count} models.")
-			await asyncio.sleep(0.01)
-			model_count = await openrouter_models()
-			append_splash_text(model_log, providers_models, f"OpenRouter offers {model_count} models.")
-			await asyncio.sleep(1)
-			if model_count <= 0:
-				append_splash_text(model_log, providers_models, 
-					f"{'*' * 50}<br>OpenRouter is known for timing out when getting a list of models!<br>{'*' * 50}"
-				)
-			await asyncio.sleep(0.01)
-			await loading_models(i-1) # recursive?
-		else:
-			TOTAL_MODELS = sum(len(models) for models in PROVIDER_MODELS.values())
-			# ignore the extra aidetour fake model stuff:
-			ignored = len(PROVIDER_MODELS["Aidetour"])
-			total_ai_providers = len(PROVIDERS) - 1 # ignore aidetour provider
-			total_ai_models = TOTAL_MODELS - ignored
-			append_splash_text(model_log, providers_models, f"With {total_ai_models} models available from {total_ai_providers} providers.")
-			append_splash_text(model_log, providers_models, f"Enjoy!")
-			splash.close()
-			splash.clear() # removes the hidden splash ui.dialog
-
-	def on_loading_models_complete(_):
-		global SPLASHED
-		# note: the underscore above is a way of saying, 
-		#       "I acknowledge this argument is passed, but I don't need to use it." 
-		#       This is common in situations like callbacks where the parameter is 
-		#       necessary syntactically but not functionally required in the callback logic.
-		provider_select.options = PROVIDERS  # update the options in the select element
-		provider_select.props(f'label="{len(PROVIDERS) - 1} Providers:"')
-		provider_select.update()  # refresh the UI to reflect changes
-		# because of nicegui's webserver-ness(fastapi/uvicorn); let's remember we splashed already:
-		SPLASHED = True
-
-	if not SPLASHED:
-		task = asyncio.create_task(loading_models(1))
-		task.add_done_callback(on_loading_models_complete)
 
 
 	async def chat_settings_dialog():
@@ -1730,6 +1630,64 @@ async def _main_page(request: Request) -> None:
 
 		settings_popup.open()
 
+
+	async def handle_models_list():
+		# Let's intentionally slow down the following operations.
+		# For some providers, these actions happen too quickly to be noticed in the splash popup.
+		append_splash_text(model_log, providers_models, f'Creating a list of AI models for each provider...')
+		model_count = await anthropic_models()
+		append_splash_text(model_log, providers_models, f"Anthropic offers {model_count} models.")
+		model_count = await google_models()
+		append_splash_text(model_log, providers_models, f"Google offers {model_count} models.")
+		model_count = await groq_models()
+		append_splash_text(model_log, providers_models, f"Groq offers {model_count} models.")
+		model_count = await lm_studio_models()
+		append_splash_text(model_log, providers_models, f"LM Studio offers {model_count} models.")
+		model_count = await mistral_models()
+		append_splash_text(model_log, providers_models, f"Mistral offers {model_count} models.")
+		model_count = await openai_models()
+		append_splash_text(model_log, providers_models, f"OpenAI offers {model_count} models.")
+		model_count = await ollama_models()
+		append_splash_text(model_log, providers_models, f"Ollama offers {model_count} models.")
+		model_count = await perplexity_models()
+		append_splash_text(model_log, providers_models, f"Perplexity offers {model_count} models.")
+		model_count = await openrouter_models()
+		append_splash_text(model_log, providers_models, f"OpenRouter offers {model_count} models.")
+		if model_count <= 0:
+			append_splash_text(model_log, providers_models, 
+				f"{'*' * 50}<br>OpenRouter is known for timing out when getting a list of models!<br>{'*' * 50}"
+			)
+
+	def sync_handle_models_list():
+	    asyncio.run(handle_models_list())
+
+	if not SPLASHED:
+		await asyncio.sleep(1.0)
+		# seems to fix the sometimes long/varying response times from providers:
+		await run.io_bound(sync_handle_models_list)
+
+		TOTAL_MODELS = sum(len(models) for models in PROVIDER_MODELS.values())
+		# ignore the extra aidetour fake model stuff:
+		ignored = len(PROVIDER_MODELS["Aidetour"])
+		total_ai_providers = len(PROVIDERS) - 1 # ignore aidetour provider
+		total_ai_models = TOTAL_MODELS - ignored
+		append_splash_text(model_log, providers_models, f"With {total_ai_models} models available from {total_ai_providers} providers.")
+		append_splash_text(model_log, providers_models, f"Enjoy!")
+		await asyncio.sleep(2)
+		SPLASH_DIALOG.close()
+		SPLASH_DIALOG.clear() # removes the hidden splash ui.dialog
+
+		# note: the underscore above is a way of saying, 
+		#       "I acknowledge this argument is passed, but I don't need to use it." 
+		#       This is common in situations like callbacks where the parameter is 
+		#       necessary syntactically but not functionally required in the callback logic.
+		provider_select.options = PROVIDERS  # update the options in the select element
+		provider_select.props(f'label="{len(PROVIDERS) - 1} Providers:"')
+		provider_select.update()  # refresh the UI to reflect changes
+		# because of nicegui's webserver-ness(fastapi/uvicorn); let's remember we splashed already:
+		SPLASHED = True
+		ui.notify("See full list of models by using Aidetour + Info.")
+
 # def startup():
 #     loop = asyncio.get_running_loop()
 #     loop.set_debug(True)
@@ -1754,14 +1712,12 @@ def main():
 			# 'title' does not work correctly on Macbook Pro M3 Max with macOS: Sequoia 15.0, 
 			# as the title is displayed twice, and the same for:
 			# app.native.window_args["title"] = "Aidetour Chat"
-			title=" ",
+			title="AidetourChat",
 			reload=False,
 			show_welcome_message=False,
-			native=True,
-			window_size=(WIDTH, HEIGHT),  # Using width and height retrieved from TinyDB
-			# dark=None,
-			# show=False,
-			# frameless=True,  # Commented due to known issues
+			show=True,
+			# native=True,
+			# window_size=(WIDTH, HEIGHT),
 		)
 	except Exception as e:
 		app.shutdown() # is not required but feels logical and says it all
@@ -1771,7 +1727,7 @@ def main():
 
 # if __name__ in {"__main__", "__mp_main__"}:
 if __name__ == '__main__':
-	freeze_support()  # noqa
+	# freeze_support()  # noqa
 	# the above is related to macOS packaging, see:
 	# Package for Installation in NiceGUI's doc's at
 	# https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
@@ -1800,7 +1756,7 @@ if __name__ == '__main__':
 	if running:
 		sys.exit(1)
 
-	# print(f"os.environ:\n{os.environ}")
+	# print(f"__main__: os.environ:\n{os.environ}")
 
 	# notes: 
 	# in the following main guard:
@@ -1812,7 +1768,7 @@ if __name__ == '__main__':
 	# note: if needed, this also works in a pystray menu.
 
 	try:
-		main() # does 'ui.run' and 'app.' stuff
+		main() # this does 'ui.run' and 'app.' stuff
 	except Exception as e:
 		app.shutdown() # maybe not required but feels logical = says it all
 

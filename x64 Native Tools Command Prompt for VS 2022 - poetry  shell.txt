@@ -1,0 +1,72 @@
+Start > Visual Studion 2022 > x64 Native Tools Command Prompt
+
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.11.5
+** Copyright (c) 2022 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools>cd C:\Users\clees\aidetour-chat
+
+C:\Users\clees\aidetour-chat>poetry shell
+Spawning shell within C:\Users\clees\aidetour-chat\.venv
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>$PSVersionTable
+'$PSVersionTable' is not recognized as an internal or external command,
+operable program or batch file.
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>which python
+'which' is not recognized as an internal or external command,
+operable program or batch file.
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>where python
+C:\Users\clees\aidetour-chat\.venv\Scripts\python.exe
+C:\Users\clees\scoop\apps\python310\current\python.exe
+C:\Users\clees\AppData\Local\Programs\Python\Python312\python.exe
+C:\Users\clees\AppData\Local\Microsoft\WindowsApps\python.exe
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>ver
+
+Microsoft Windows [Version 10.0.22631.4317]
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\clees\aidetour-chat> poetry shell
+Virtual environment already activated: C:\Users\clees\aidetour-chat\.venv
+PS C:\Users\clees\aidetour-chat> exit
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>$PSVersionTable
+'$PSVersionTable' is not recognized as an internal or external command,
+operable program or batch file.
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
+
+PS C:\Users\clees\aidetour-chat> $PSVersionTable
+
+Name                           Value
+----                           -----
+PSVersion                      5.1.22621.4249
+PSEdition                      Desktop
+PSCompatibleVersions           {1.0, 2.0, 3.0, 4.0...}
+BuildVersion                   10.0.22621.4249
+CLRVersion                     4.0.30319.42000
+WSManStackVersion              3.0
+PSRemotingProtocolVersion      2.3
+SerializationVersion           1.1.0.1
+
+
+PS C:\Users\clees\aidetour-chat> exit
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>ver
+
+Microsoft Windows [Version 10.0.22631.4317]
+
+(aidetour-chat-py3.10) C:\Users\clees\aidetour-chat>

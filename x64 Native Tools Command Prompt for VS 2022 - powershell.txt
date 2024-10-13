@@ -1,0 +1,40 @@
+
+powershell ... switch from cmd
+exit ... switch back to cmd
+
+... easy check for powershell:
+(aidetour-chat-py3.10) PS C:\Users\clees\aidetour-chat> $PSVersionTable
+
+Name                           Value
+----                           -----
+PSVersion                      5.1.22621.4249
+PSEdition                      Desktop
+PSCompatibleVersions           {1.0, 2.0, 3.0, 4.0...}
+BuildVersion                   10.0.22621.4249
+CLRVersion                     4.0.30319.42000
+WSManStackVersion              3.0
+PSRemotingProtocolVersion      2.3
+SerializationVersion           1.1.0.1
+
+(Get-Command python).Path ... which/where python
+
+... dev:
+cd C:\Users\clees\aidetour-chat
+poetry shell
+edit .py's
+poetry run python -B .\aidetourchat\aidetour_chat.py
+
+rm build ... press A
+rm dist ... press A
+cp .\aidetourchat\*.ico .\dist\
+
+... creates build/dist
+nicegui-pack --name AidetourChat --onefile --add-data "aidetourchat/images;images" .\aidetourchat\aidetour_chat.py
+... after many tries, --windowed does not work
+... try exe:
+cd dist
+AidetourChat.exe
+
+
+
+
