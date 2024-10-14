@@ -1372,17 +1372,27 @@ async def _main_page(request: Request) -> None:
 
 			ABORT_STREAM.set_visibility(False)
 
+	# with ui.element('div').classes('flex flex-col min-h-full w-full max-w-3xl mx-auto'):
+	# 	MESSAGE_CONTAINER = (
+	# 		ui.element("div")
+	# 		.classes(
+	# 			"aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
+	# 		)
+	# 		.props('id="scrollable"')
+	# 		.style(f'height: {wih}px; font-size: 15px !important;')
+	# 	)
+	# 	ui.separator().props("size=4px color=primary") # insinuate bottom of chat history
 
-	with ui.element('div').classes('flex flex-col min-h-full w-full max-w-3xl mx-auto'):
-		MESSAGE_CONTAINER = (
-			ui.element("div")
-			.classes(
-				"aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
-			)
-			.props('id="scrollable"')
-			.style(f'height: {wih}px; font-size: 15px !important;')
-		)
-		ui.separator().props("size=4px color=primary") # insinuate bottom of chat history
+	with ui.element('div').classes('flex flex-col min-h-full w-full mx-auto'):
+	    MESSAGE_CONTAINER = (
+	        ui.element("div")
+	        .classes(
+	            "aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
+	        )
+	        .props('id="scrollable"')
+	        .style(f'height: {wih}px; font-size: 15px !important;') 
+	    )
+	    ui.separator().props("size=4px color=primary")  # Insinuate bottom of chat history
 
 	def check_splashed_and_providers():
 		if SPLASHED:
