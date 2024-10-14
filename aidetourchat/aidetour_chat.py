@@ -1,8 +1,8 @@
 # macOS packaging support: 
 import platform
 if platform.system() == "Darwin":
-    from multiprocessing import freeze_support  # noqa
-    freeze_support()  # noqa
+	from multiprocessing import freeze_support  # noqa
+	freeze_support()  # noqa
 # the above is related to macOS packaging, see:
 # Package for Installation in NiceGUI's doc's at
 # https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
@@ -32,7 +32,6 @@ from starlette.responses import RedirectResponse
 
 from nicegui import app, ui, run
 from nicegui import __version__ as nv
-# import webview # pip install pywebview
 
 from openai import OpenAI
 
@@ -60,28 +59,14 @@ from groq import __version__ as gv
 
 from importlib.metadata import version, PackageNotFoundError
 
-# sys.stdout = open('logs.txt', 'w') # nicegui's packaging suggestion
-# sys.stdout = open(os.devnull, 'w')
-# Windows: deal with emoji's and "UnicodeEncodeError: 'charmap' codec can't encode character..."
-# sys.stdout.reconfigure(encoding='utf-8')
 
-APP_FOLDER_NAME = "aidetour_app"
-# while different for each OS, expanduser('~') works for all, 
-# so let's use it as the default for: settings, logs, chat history
-# and just in case a new folder can't be created:
-USER_HOME_PATH = os.path.expanduser('~')
-APP_HOME_PATH = USER_HOME_PATH
-
-SETTINGS_FILE = 'Aidetour_Chat_Settings.json'
-SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
-
-# determine where the images are:
+# determine where the images are for this app:
 if getattr(sys, 'frozen', False):
-    # packaged environment (PyInstaller or similar)
-    base_path = sys._MEIPASS  # points to the temp folder with bundled files
+	# packaged environment (PyInstaller or similar)
+	base_path = sys._MEIPASS  # points to the temp folder with bundled files
 else:
-    # development environment (non-packaged)
-    base_path = os.path.dirname(os.path.abspath(__file__))
+	# development environment (non-packaged)
+	base_path = os.path.dirname(os.path.abspath(__file__))
 images_path = os.path.join(base_path, 'images')
 try:
 	app.add_static_files('/images', images_path)
@@ -89,28 +74,37 @@ except Exception as e:
 	print(f"ERROR: can't add_static_files: /images: e:\n{e}")
 	sys.exit(1)
 
+APP_FOLDER_NAME = "aidetour_app" # not the installation path/stuff!
+AIDETOUR_APP_PATH = ""
+SETTINGS_FILE_NAME = 'Aidetour_Chat_Settings.json'
+SAVED_CHAT_HISTORIES = []
+
 # determine the directory for storing app/user data:
+LOG_PATH = ""
 try:
+	# while different for each OS, expanduser('~') works for all
 	if sys.platform == "win32":
-	    # Windows: use the local application data directory
-	    aidetour_app = os.getenv('LOCALAPPDATA', os.path.expanduser('~'))
-	    aidetour_app = os.path.join(aidetour_app, APP_FOLDER_NAME)
+		# Windows: use the local application data directory
+		aidetour_app = os.getenv('LOCALAPPDATA', os.path.expanduser('~'))
+		aidetour_app = os.path.join(aidetour_app, APP_FOLDER_NAME)
 	else:
-	    # Linux and macOS: use the user's home directory = ~/.aidetour_app
-	    aidetour_app = os.path.join(os.path.expanduser('~'), '.aidetour_app')
+		# Linux and macOS: use the user's home directory = ~/aidetour_app
+		aidetour_app = os.path.join(os.path.expanduser('~'), 'aidetour_app')
 	# create new or use existing dir/folder:
 	os.makedirs(aidetour_app, exist_ok=True)
-	log_path = os.path.join(aidetour_app, 'logs.txt')
-	sys.stdout = open(log_path, 'w') # nicegui's packaging suggestion
+	AIDETOUR_APP_PATH = aidetour_app
+	LOG_PATH = os.path.join(aidetour_app, 'logs.txt')
+	# use LOG_PATH just before ui.run as any print's will go in there
+	# ... or just ignore it all:
+	# sys.stdout = open(os.devnull, 'w')
 except Exception as e:
-	print(f"ERROR: can't setup ~/.aidetour_app dir/folder: e:\n{e}")
+	print(f"ERROR: can't setup aidetour_app folder: e:\n{e}\n")
 	sys.exit(1)
+SETTINGS_FILE_PATH = os.path.join(aidetour_app, SETTINGS_FILE_NAME)
 
 # using 'localhost' prioritizes IPv6, so IP = ::1, well on macOS
 HOST = '127.0.0.1' 
 PORT = 8000
-WIDTH = 810
-HEIGHT = 840
 
 ACTIVE_SESSION = None
 CHAT_HISTORY = ""
@@ -167,10 +161,6 @@ try:
 except PackageNotFoundError:
 	ov = 'unknown'
 try:
-	pwv = version('pywebview')
-except PackageNotFoundError:
-	pwv = 'unknown'
-try:
 	uvv = version('uvicorn')
 except PackageNotFoundError:
 	uvv = 'unknown'
@@ -178,10 +168,6 @@ try:
 	fav = version('fastapi')
 except PackageNotFoundError:
 	fav = 'unknown'
-try:
-	pipv = version('pip')
-except PackageNotFoundError:
-	pipv = 'unknown'
 
 # app.native.settings['ALLOW_DOWNLOADS'] = True
 # # app.native.window_args["title"] = f"Aidetour Chat on http://{HOST}:{PORT}"
@@ -203,21 +189,6 @@ def convert_to_int(s: str, default: int) -> int:
 	except Exception:
 		return default
 
-def set_app_home_path():
-	global APP_HOME_PATH, SETTINGS_FILE_PATH
-	# note: these globals were already set to default (the worst case) settings
-	try:
-		app_folder = os.path.join(USER_HOME_PATH, APP_FOLDER_NAME)
-		# try to create the desired app folder if it doesn't exist
-		if not os.path.exists(app_folder):
-			os.makedirs(app_folder)
-		APP_HOME_PATH = app_folder
-		SETTINGS_FILE_PATH = os.path.join(APP_HOME_PATH, SETTINGS_FILE)
-	except Exception as e:
-		# print(f"Warning: Unable to create folder '{app_folder}'. Reason:\n{e}")
-		# print(f"Output will be written directly to the user's home folder '{USER_HOME_PATH}' instead.")
-		pass
-
 def read_settings_from_db():
 	global APP_DB_SETTINGS, PROVIDER_DB_SETTINGS
 	try:
@@ -238,8 +209,6 @@ def get_app_setting(key):
 	default_values = {
 		'host': '127.0.0.1',
 		'port': 8000,
-		'window_width': 810,
-		'window_height': 840,
 		'dark_mode': True
 	}
 	if key in APP_DB_SETTINGS:
@@ -801,9 +770,13 @@ async def AidetourResponseStreamer(prompt):
 		total_ai_providers = len(PROVIDERS) - 1
 		ignored = len(PROVIDER_MODELS["Aidetour"])
 		total_ai_models = TOTAL_MODELS - ignored
-		yield f"Client IP: {ui.context.client.ip}\n"
-		yield f"Host: {HOST}\n"
-		yield f"Port: {PORT}\n\n"
+		yield f"Platform: {platform.system()}\n"
+		yield f"Settings at:\n"
+		yield f"\t{SETTINGS_FILE_PATH}\n"
+		yield f"AidetourChat personal server at:\n"
+		yield f"\tIP: {ui.context.client.ip}\n"
+		yield f"\tHost: {HOST}\n"
+		yield f"\tPort: {PORT}\n\n"
 		yield f"*** AI Providers and their LLM Models ***\n"
 		yield f"In total there are {total_ai_models} models available from {total_ai_providers} providers.\n"
 		for index, provider in enumerate(PROVIDERS, start=0):
@@ -826,11 +799,9 @@ async def AidetourResponseStreamer(prompt):
 		yield f"\n\n--- Software Versions ---\n"
 		yield f"Aidetour: 1.0.0\n"
 		yield f"Python: {python_version}\n"
-		yield f"pip: {pipv}\n"
 		yield f"NiceGUI: {nicegui_version}\n"
 		yield f"FastAPI: {fav}\n"
 		yield f"Uvicorn: {uvv}\n"
-		yield f"PyWebView: {pwv}\n"
 		yield f"\n--- AI Provider's SDK versions ---\n"
 		yield f"1. Anthropic: {anthropic_version}\n"
 		yield f"2. Google Generativeai: {genai_version}\n"
@@ -839,6 +810,12 @@ async def AidetourResponseStreamer(prompt):
 		yield f"5. Ollama: {ollama_version}\n"
 		yield f"6. OpenAI: {openai_version}\n"
 		yield f"* note: many providers are somewhat OpenAI API compatible\n"
+		yield "\nSaved chat histories for this session:\n"
+		if not SAVED_CHAT_HISTORIES:
+		    yield "\tnothing\n"
+		else:
+		    for chat in SAVED_CHAT_HISTORIES:
+		        yield f"{chat}\n"
 	else:
 		import random
 		import string
@@ -980,9 +957,9 @@ async def _main_page(request: Request) -> None:
 		window_innerHeight = await ui.run_javascript(f"window.innerHeight")
 		return window_innerHeight
 
-	async def windowInnerWidth():
-		window_innerWidth = await ui.run_javascript(f"window.innerWidth")
-		return window_innerWidth
+	# async def windowInnerWidth():
+	#   window_innerWidth = await ui.run_javascript(f"window.innerWidth")
+	#   return window_innerWidth
 
 	async def copy_me_ai_chat_pair(me_message, response_message):
 		# TL;DR = this error happens a lot when using: ui.run_javascript
@@ -1049,31 +1026,25 @@ async def _main_page(request: Request) -> None:
 		CHAT_HISTORY = ""
 
 	async def save_chat(text) -> None:
-		return
-		# text = await ui.run_javascript(f"getElement({MESSAGE_CONTAINER.id}).innerText")
-		# filename = await app.native.main_window.create_file_dialog(
-		# 	dialog_type=webview.SAVE_DIALOG,
-		# 	allow_multiple=False, 
-		# 	file_types=("Text file (*.txt)",), 
-		# 	save_filename="aidetour_chat_history.txt",
-		# )
-		# if filename is not None:
-		# 	try:
-		# 		# utf-8 otherwise Windows errors:
-		# 		with open(filename, "w", encoding='utf-8') as f:
-		# 			filtered_lines = (
-		# 				re.sub(r"\*\*|##|###", "", line).strip() 
-		# 				for line in text.splitlines() 
-		# 				if re.sub(r"\*\*|##|###", "", line).strip() != "content_paste"
-		# 			)
-		# 			text_without_markdown_and_content_paste = "\n".join(filtered_lines)
-		# 			f.write(text_without_markdown_and_content_paste)
-		# 			ui.notify("Chat history saved.")
-		# 	except Exception as e:
-		# 		print(f"\nsave_chat e:\n{e}\ntext_without_markdown_and_content_paste:\n{text_without_markdown_and_content_paste}\n")
-		# 		ui.notify(f"Error saving file: {e}")
-		# else:
-		# 	ui.notify("Filename is unknown/none, so unable file save!")
+		text = await ui.run_javascript(f"getElement({MESSAGE_CONTAINER.id}).innerText")
+		# generate the filename with epoch timestamp
+		timestamp = int(time.time())
+		filename = f"{timestamp}_AidetourChat_history.txt"
+		filepath = os.path.join(AIDETOUR_APP_PATH, filename)
+		try:
+			# filter out markdown and specific unwanted content
+			filtered_lines = (
+				re.sub(r"\*\*|##|###", "", line).strip()
+				for line in text.splitlines()
+				if re.sub(r"\*\*|##|###", "", line).strip() != "content_paste"
+			)
+			text_without_markdown_and_content_paste = "\n".join(filtered_lines)
+			with open(filepath, "w", encoding='utf-8') as file:
+				file.write(text_without_markdown_and_content_paste)
+			SAVED_CHAT_HISTORIES.append(filepath)
+			ui.notify(f"Chat history saved at: {filepath}.")
+		except Exception as e:
+			ui.notify(f"Error saving chat history file at: {filepath}:\n{e}")
 
 	async def send() -> None:
 		global CHAT_HISTORY, SEND_BUTTON, THINKING_LABEL
@@ -1446,18 +1417,16 @@ async def _main_page(request: Request) -> None:
 		with ui.dialog() as settings_popup:
 			settings_popup.props("persistent")
 			settings_popup.props("maximized")
-			with settings_popup, ui.card():
+			with settings_popup, ui.card().classes("w-full items-center"):
 				with ui.column():
 					with ui.row().classes("w-full items-center mb-0.1 space-x-2"):
 						ui.space()
 						ui.label('Aidetour Chat Settings').style("font-size: 20px; font-weight: bold").classes("m-0")
 
-						def save_settings(host_input, port_input, window_width_input, window_height_input, dark_mode_switch, primary_color, provider_inputs):
+						def save_settings(host_input, port_input, dark_mode_switch, primary_color, provider_inputs):
 							# ui.notify('Saving ... any errors found will revert to the default values.', color='orange')
 							set_app_setting('host', host_input.value)
 							set_app_setting('port', convert_to_int(port_input.value, PORT))
-							set_app_setting('window_width', convert_to_int(window_width_input.value, WIDTH))
-							set_app_setting('window_height', convert_to_int(window_height_input.value, HEIGHT))
 							set_app_setting('dark_mode', True if dark_mode_switch.value else False)
 							set_app_setting('primary_color', primary_color)
 							for provider, inputs in provider_inputs.items():
@@ -1475,8 +1444,6 @@ async def _main_page(request: Request) -> None:
 						ui.button(icon='save_as', on_click=lambda: save_settings(
 							host_input, 
 							port_input, 
-							window_width_input, 
-							window_height_input, 
 							dark_mode_switch,
 							get_primary_color(),
 							provider_inputs
@@ -1500,7 +1467,7 @@ async def _main_page(request: Request) -> None:
 							  ui.label(f"Aidetour Chat Settings").classes("text-2xl font-bold text-center mt-4").style('background-color: green;')
 
 					with ui.column().classes('mb-2'):
-						ui.label('App Settings:').style('font-size: 18px; font-weight: bold;')
+						# ui.label('App Settings:').style('font-size: 18px; font-weight: bold;')
 
 						def validate_port(value, port_input):
 							try:
@@ -1537,20 +1504,7 @@ async def _main_page(request: Request) -> None:
 								.props("autocorrect=off") \
 								.on('blur', lambda e: validate_port(e.sender.value, port_input))
 
-							window_width_input = ui.input(
-								label='Width', 
-								value=get_app_setting('window_width')) \
-								.classes('w-1/5') \
-								.props("spellcheck=false") \
-								.props("autocomplete=off") \
-								.props("autocorrect=off")
-
-							window_height_input = ui.input(
-								label='Height', 
-								value=get_app_setting('window_height')) \
-								.classes('w-1/5')
-
-						with ui.row().classes('w-full items-center'):
+							# with ui.row().classes('w-full items-center'):
 							dark_light = get_app_setting('dark_mode')
 							dark_light = ""
 							if dark_light is None or dark_light == "":
@@ -1569,11 +1523,10 @@ async def _main_page(request: Request) -> None:
 							def get_primary_color():
 								return CURRENT_PRIMARY_COLOR
 
-							with ui.button(icon='palette').props('id=picker').props('no-caps flat fab-mini').classes('ml-4').tooltip("select primary color") as button:
+							with ui.button(icon='palette').props('id=picker').props('no-caps flat fab-mini').classes('ml-4').tooltip("change color, note: changes only applied after restarting app") as button:
 								button = ui.color_picker(on_pick=lambda e: set_primary_color(e.color))
 								button.q_color.props('''default-view=palette no-header no-footer :palette="['#6200ea', '#ff0000', '#ff8000', '#d6d600', '#4CAF50', '#00a3a3', '#007bf5', '#7b00f5', '#d600d6', '#333333']"''')
 								# button.q_color.props('default-view=palette no-header no-footer') # all colors
-							ui.label('color changes after relaunching app').classes('ml-0').style('font-size: 10px; font-style: italic; color: #546e7a;')
 
 					with ui.row().classes('w-full items-center'):
 						ui.label('Provider Settings:').style('font-size: 18px; font-weight: bold; margin-bottom: 8px;')
@@ -1659,7 +1612,7 @@ async def _main_page(request: Request) -> None:
 			)
 
 	def sync_handle_models_list():
-	    asyncio.run(handle_models_list())
+		asyncio.run(handle_models_list())
 
 	if not SPLASHED:
 		await asyncio.sleep(1.0)
@@ -1688,37 +1641,45 @@ async def _main_page(request: Request) -> None:
 		SPLASHED = True
 		ui.notify("See full list of models by using Aidetour + Info.")
 
-# def startup():
-#     loop = asyncio.get_running_loop()
-#     loop.set_debug(True)
-#     loop.slow_callback_duration = 0.05
+def startup():
+	print(f"Welcome!\nAidetourChat personal server has started, see: http://{HOST}:{PORT} ")
+	print(f"in a web browser; your default browser should pop up automatically.")
+	print(f"\n*** WARNING!\nIf you quit your web browser before using the Quit button in AidetourChat, ")
+	print(f"you must use Ctrl-C (control+C) to stop the server in this window.")
+	print(f"You may see: 'KeyboardInterrupt' and other stuff; just ignore that.")
+	print(f"Otherwise, if the server does not stop you will be locked out, as AidetourChat is single user only.")
+	print(f"Of course, you can always just restart your computer.")
+
+	# mostly for Windows: to deal with: emoji's and "UnicodeEncodeError: 'charmap' codec can't encode character..."
+	sys.stdout.reconfigure(encoding='utf-8')
+
+	# nicegui's packaging (build/dist) suggestion:
+	sys.stdout = open(LOG_PATH, 'w') 
 
 def main():
 	try:
-		# app.on_startup(startup)
-
-		set_app_home_path()
+		app.on_startup(startup)
 
 		read_settings_from_db()
 
 		HOST = get_app_setting('host')
 		PORT = get_app_setting('port')
-		WIDTH = get_app_setting('window_width')
-		HEIGHT = get_app_setting('window_height')
+
+		print(f"\nAidetourChat personal server is starting up; standby . . .")
+		print(f"AidetourChat app info:")
+		print(f"\tAIDETOUR_APP_PATH: {AIDETOUR_APP_PATH}")
+		print(f"\tSETTINGS_FILE_PATH: {SETTINGS_FILE_PATH}")
+		print(f"\tLOG_PATH: {LOG_PATH}\n")
 
 		ui.run(
 			host=HOST,
 			port=PORT,
-			# 'title' does not work correctly on Macbook Pro M3 Max with macOS: Sequoia 15.0, 
-			# as the title is displayed twice, and the same for:
-			# app.native.window_args["title"] = "Aidetour Chat"
 			title="AidetourChat",
 			reload=False,
 			show_welcome_message=False,
 			show=True,
-			# native=True,
-			# window_size=(WIDTH, HEIGHT),
 		)
+		# fyi: nothing happens after ui.run
 	except Exception as e:
 		app.shutdown() # is not required but feels logical and says it all
 		# sys.exit(1)
@@ -1731,8 +1692,6 @@ if __name__ == '__main__':
 	# the above is related to macOS packaging, see:
 	# Package for Installation in NiceGUI's doc's at
 	# https://nicegui.io/documentation/section_configuration_deployment#package_for_installation
-	# ... and:
-	# https://cx-freeze.readthedocs.io/en/stable/faq.html#multiprocessing-support
 
 	# the following works for 'native=True' mode, as 
 	# this code is trying to be more like a desktop app 
