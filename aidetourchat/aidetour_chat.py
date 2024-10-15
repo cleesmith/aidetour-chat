@@ -772,12 +772,12 @@ async def AidetourResponseStreamer(prompt):
 		total_ai_models = TOTAL_MODELS - ignored
 		yield f"Platform: {platform.system()}\n"
 		yield f"Settings at:\n"
-		yield f"\t{SETTINGS_FILE_PATH}\n"
-		yield f"AidetourChat personal server at:\n"
-		yield f"\tIP: {ui.context.client.ip}\n"
+		yield f"{SETTINGS_FILE_PATH}\n"
+		yield f"\nAidetourChat personal server info:\n"
+		yield f"\tYour connection IP: {ui.context.client.ip}\n"
 		yield f"\tHost: {HOST}\n"
-		yield f"\tPort: {PORT}\n\n"
-		yield f"*** AI Providers and their LLM Models ***\n"
+		yield f"\tPort: {PORT}\n"
+		yield f"\n*** AI Providers and their LLM Models ***\n"
 		yield f"In total there are {total_ai_models} models available from {total_ai_providers} providers.\n"
 		for index, provider in enumerate(PROVIDERS, start=0):
 			if provider == "Aidetour":
@@ -809,13 +809,12 @@ async def AidetourResponseStreamer(prompt):
 		yield f"4. MistralAI: {mistralai_version}\n"
 		yield f"5. Ollama: {ollama_version}\n"
 		yield f"6. OpenAI: {openai_version}\n"
-		yield f"* note: many providers are somewhat OpenAI API compatible\n"
 		yield "\nSaved chat histories for this session:\n"
 		if not SAVED_CHAT_HISTORIES:
-		    yield "\tnothing\n"
+			yield "nothing\n"
 		else:
-		    for chat in SAVED_CHAT_HISTORIES:
-		        yield f"{chat}\n"
+			for chat in SAVED_CHAT_HISTORIES:
+				yield f"{chat}\n"
 	else:
 		import random
 		import string
@@ -962,30 +961,6 @@ async def _main_page(request: Request) -> None:
 	#   return window_innerWidth
 
 	async def copy_me_ai_chat_pair(me_message, response_message):
-		# TL;DR = this error happens a lot when using: ui.run_javascript
-		#   "TimeoutError: JavaScript did not respond within 1.0 s"
-		# ... in testing the following does not fix it:
-		#   await ui.context.client.connected()
-		#   await asyncio.sleep(0.5)
-		# why? 
-		# ... because the error mostly happens due to not finding the html element, and this:
-		#   text = await ui.run_javascript(f"getElement('c{me_message.id}').innerText")
-		#   ... the nicegui-way does not find the element, with or without the missing 'c'
-		# ... looking via Chrome dev tools Elements, it shows: id="c34" and not id="34":
-		# <div class="q-message q-message-sent" id="c34">
-		#   <div class="q-message-container row items-end no-wrap reverse">
-		#       <div class="">
-		#           <div class="q-message-text q-message-text--sent">
-		#               <div class="q-message-text-content q-message-text-content--sent"><div>
-		#                   <div id="c35">
-		#                       <pre style="white-space: pre-wrap; user-select: text;">ME: list the planets</pre>
-		#                   </div>
-		#               </div>
-		#               <div class="q-message-stamp">09:49:47 AM on Sunday, Sep 01, 2024</div>
-		#           </div>
-		#       </div>
-		#   </div>
-		# </div>
 		text = "\n"
 		text += await ui.run_javascript(f"return document.getElementById('c{me_message.id}').innerText;")
 		text += await ui.run_javascript(f"return document.getElementById('c{response_message.id}').innerText;")
@@ -1135,6 +1110,20 @@ async def _main_page(request: Request) -> None:
 		# fixme nice for testing without repeated typing:
 		# user_prompt.value = 'write a story about Japan, take your time, and use lots of words'
 
+		async def copy_prompt_ME_back_to_prompt(prompt):
+			try:
+				prompt_text = await ui.run_javascript(f"return document.getElementById('c{prompt.id}').innerText;")
+				lines = prompt_text.splitlines()
+				if len(lines) > 2:
+					prompt_text = '\n'.join(lines[1:-1])
+				else:
+					prompt_text = '\n'.join(lines)
+				user_prompt.value = prompt_text
+				user_prompt.update()
+				ui.notify(f"The prompt inside ME: message was copied back to Prompt, so now you can edit and re-Send.")
+			except Exception as e:
+				ui.notify(f"Unable to copy ME: message back to Prompt.  Error: {e}")
+
 		try:
 			# fixme best solution is to deny(can't click) user all of the buttons! except for quit/exit
 			with MESSAGE_CONTAINER:
@@ -1145,6 +1134,16 @@ async def _main_page(request: Request) -> None:
 					.tooltip("copy this section (ME/AI) to the clipboard") \
 					.props('icon=content_paste round flat') \
 					.style("padding: 1px 1px; font-size: 9px;")
+
+				if not (PROVIDER == 'Aidetour' and MODEL in ["Info", "ReadMe"]):
+					ui.button(
+						icon='edit',
+						on_click=lambda: copy_prompt_ME_back_to_prompt(me_message)
+					) \
+					.tooltip("reuse this prompt for editing") \
+					.props('icon=edit round flat') \
+					.style("padding: 1px 1px; font-size: 9px;")
+
 				ui.html(f"<pre style='white-space: pre-wrap;'><br></pre>")
 			await ui.run_javascript('scrollable.scrollTo(0, scrollable.scrollHeight)')
 			MESSAGE_CONTAINER.remove(spinner)
@@ -1194,38 +1193,12 @@ async def _main_page(request: Request) -> None:
 
 		with ui.row().classes("w-full no-wrap mb-0 mt-5 ml-0").style('min-width: 100%; margin-left: 0; justify-content: left;'):
 
-			# SEND button and thinking label
-			with ui.row():
-				SEND_BUTTON = (
-					ui.button(
-						icon="send",
-						on_click=send,
-					)
-					.props('outline')
-					.classes("ml-0 mr-2 text-sm px-4 py-2 mt-3")
-					.style(
-						"box-shadow: 0 0 1rem 0 #546e7a; transition: transform 0.3s ease;"
-					)
-					# .props('icon=img:/images/Aidetour.png')
-				)
-
-				with SEND_BUTTON:
-					with ui.tooltip('').props("flat fab"):
-						ui.html("send Prompt")
-						# ui.html(
-						#   "<p>Enter a <b>Prompt</b> below,<br>"
-						#   "then click this button to send<br>"
-						#   "to the selected AI Provider/Model.</p>"
-						# )
-				THINKING_LABEL = ui.spinner('grid', size='sm') # , color='green')
-				THINKING_LABEL.set_visibility(False)
-
 			# maintains case sensitivity in ui.select:
 			ui.add_head_html(
 				"<style> .prevent-uppercase { text-transform: none !important; } </style>"
 			)
 
-			with ui.column().classes("flex-1 w-1/3 p-0 ml-15"):
+			with ui.column().classes("flex-1 w-1/3 p-0 ml-15").style('transform: scale(0.85);'):
 				provider_select = (
 					ui.select(
 						PROVIDERS,
@@ -1237,17 +1210,8 @@ async def _main_page(request: Request) -> None:
 					.bind_value(globals(), "PROVIDER")  # bind the selected value to the global PROVIDER variable
 				)
 
-			with ui.column().classes("flex-1 w-1/3 p-0 mr-2"):
-				# model_select = (
-				#   ui.select(
-				#       PROVIDER_MODELS[PROVIDER],
-				#       value=MODEL,
-				#       label="Models:",
-				#   ).classes("w-64 prevent-uppercase")
-				#   .bind_value(globals(), "MODEL")  # bind the selected value to the global MODEL variable
-				# )
-
-				# user can type to search/select:
+			with ui.column().classes("flex-1 w-1/3 p-0").style('transform: scale(0.85);'):
+				# user can type to search/select, like for free:
 				model_select = (
 					ui.select(
 						value=MODEL,
@@ -1268,7 +1232,7 @@ async def _main_page(request: Request) -> None:
 				) if e.value != "Aidetour" else model_select.props('label="Models:"')
 			)
 
-			with ui.column().classes("flex-1 w-1/3 p-0 mt-2"):
+			with ui.column().classes("flex-1 w-1/3 p-0 ml-3").style('transform: scale(0.85);'):
 				# use gap-0 to make button/knob closer together:
 				with ui.row().classes("mb-0 mt-0 ml-0 gap-0 items-center"):
 					ui.button(
@@ -1290,25 +1254,55 @@ async def _main_page(request: Request) -> None:
 						size='xl'
 					) \
 					.bind_value(globals(), "TEMP") \
-					.tooltip("Temperature")
+					.tooltip("Temperature") \
 
 		with ui.row().classes("w-full mb-0 mt-0 ml-0"):
-			user_prompt = (
-				ui.textarea(label="Prompt:", placeholder="Enter your prompt here...")
-				.classes("w-full")
-				.props("clearable")
-				.props("rows=3")
-				.props("spellcheck=false")
-				.props("autocomplete=off")
-				.props("autocorrect=off")
-				.props("tabindex=0")
-				.classes('w-full self-center')
-			)
+
+			with ui.column().classes("flex-none p-0"):
+				# SEND button and thinking label
+				with ui.row().classes("items-center"):
+					SEND_BUTTON = (
+						ui.button(
+							icon="send",
+							on_click=send,
+						)
+						.props('outline')
+						.classes("ml-0 mr-2 text-sm px-4 py-2 mt-5")
+						.style(
+							"box-shadow: 0 0 1rem 0 #546e7a; transition: transform 0.3s ease;"
+						)
+						# .props('icon=img:/images/Aidetour.png')
+					)
+
+					with SEND_BUTTON:
+						with ui.tooltip('').props("flat fab"):
+							ui.html("send Prompt")
+							# ui.html(
+							#   "<p>Enter a <b>Prompt</b> below,<br>"
+							#   "then click this button to send<br>"
+							#   "to the selected AI Provider/Model.</p>"
+							# )
+
+					THINKING_LABEL = ui.spinner('grid', size='sm').classes("ml-1 mt-5") # , color='green')
+
+			THINKING_LABEL.set_visibility(False)
+
+			with ui.column().classes("flex-grow p-0"):
+				user_prompt = (
+					ui.textarea(label="Prompt:", placeholder="Enter your prompt here...")
+					.classes("w-full")
+					.props("clearable")
+					.props("rows=3")
+					.props("spellcheck=false")
+					.props("autocomplete=off")
+					.props("autocorrect=off")
+					.props("tabindex=0")
+				)
 
 		# fixme nice for testing without repeated typing:
 		# user_prompt.value = 'write a story about Japan, take your time, and use lots of words'
 
-		with ui.row().classes("w-full items-center mb-0.1 space-x-2"):
+		with ui.row().classes("w-full mb-0.1 space-x-0"):
 
 			# https://fonts.google.com/icons?icon.query=clip&icon.size=24&icon.color=%23e8eaed
 
@@ -1372,27 +1366,16 @@ async def _main_page(request: Request) -> None:
 
 			ABORT_STREAM.set_visibility(False)
 
-	# with ui.element('div').classes('flex flex-col min-h-full w-full max-w-3xl mx-auto'):
-	# 	MESSAGE_CONTAINER = (
-	# 		ui.element("div")
-	# 		.classes(
-	# 			"aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
-	# 		)
-	# 		.props('id="scrollable"')
-	# 		.style(f'height: {wih}px; font-size: 15px !important;')
-	# 	)
-	# 	ui.separator().props("size=4px color=primary") # insinuate bottom of chat history
-
 	with ui.element('div').classes('flex flex-col min-h-full w-full mx-auto'):
-	    MESSAGE_CONTAINER = (
-	        ui.element("div")
-	        .classes(
-	            "aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
-	        )
-	        .props('id="scrollable"')
-	        .style(f'height: {wih}px; font-size: 15px !important;') 
-	    )
-	    ui.separator().props("size=4px color=primary")  # Insinuate bottom of chat history
+		MESSAGE_CONTAINER = (
+			ui.element("div")
+			.classes(
+				"aidetour-chat-history w-full overflow-auto p-2 rounded flex-grow"
+			)
+			.props('id="scrollable"')
+			.style(f'height: {wih}px; font-size: 15px !important;') 
+		)
+		ui.separator().props("size=4px color=primary")  # Insinuate bottom of chat history
 
 	def check_splashed_and_providers():
 		if SPLASHED:
