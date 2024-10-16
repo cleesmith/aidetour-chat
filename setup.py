@@ -1,3 +1,4 @@
+# cd aidetour-chat
 # python setup.py build
 
 import sys
@@ -8,22 +9,20 @@ build_exe_options = {
     "packages": [
         "os", "sys", "nicegui", "uvicorn", "fastapi", "httpx", "tinydb",
         "multiprocessing", "signal", "traceback", "uuid", "re", "time", "datetime",
-        "asyncio", "collections", "pyperclip", "starlette", "webview", "openai",
+        "asyncio", "collections", "pyperclip", "starlette", "openai",
         "google.generativeai", "anthropic", "groq", "mistralai", "ollama", "socks"
     ],
-    "include_files": ["images/"],  # Add any static files here
+    "include_files": [
+        ("aidetourchat/images/", "images/")  # Include images folder
+    ],
 }
-
-# Setting the base to None for non-Windows platforms.
-# For macOS GUI apps, base is set to None.
-base = None
 
 setup(
     name="AidetourChat",
     version="1.0",
     description="Aidetour Chat app",
     options={"build_exe": build_exe_options},
-    executables=[Executable("aidetour_chat.py", base=base)],
+    executables=[Executable("aidetourchat/aidetour_chat.py", base=None)]
 )
 
 
@@ -35,10 +34,9 @@ setup(
 #         "os", "sys", "nicegui", "uvicorn", "fastapi", "httpx", "tinydb",
 #         "multiprocessing", "signal", "traceback", "uuid", "re", "time", "datetime",
 #         "asyncio", "collections", "pyperclip", "starlette", "webview", "openai",
-#         "google.generativeai", "anthropic", "groq", "mistralai", "ollama"
+#         "google.generativeai", "anthropic", "groq", "mistralai", "ollama", "socks"
 #     ],
 #     "include_files": ["images/"],
-#     "includes": ["nicegui.functions.clipboard"], 
 # }
 
 # # Base should be None for non-Windows platforms
@@ -46,7 +44,7 @@ setup(
 
 # # Mac-specific app bundle options
 # bdist_mac_options = {
-#     "iconfile": "Funnel.icns",
+#     "iconfile": "AidetourChatIcon.icns",
 #     "bundle_name": "AidetourChat",  # Name of your app without .app extension
 #     # "custom_info_plist": "custom_Info.plist",  # Optional: Custom Info.plist file if needed
 #     # "include_resources": [("path/to/resource", "resource_in_app")],  # Include additional resources
@@ -54,9 +52,9 @@ setup(
 
 # executables = [
 #     Executable(
-#         "aidetour_chat.py",
+#         "aidetourchat/aidetour_chat.py",
 #         base=base,
-#         target_name="AidetourChat",  # The name of your macOS app
+#         target_name="AidetourChat",
 #     )
 # ]
 

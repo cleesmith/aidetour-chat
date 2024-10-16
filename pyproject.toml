@@ -28,6 +28,8 @@ pyperclip = "^1.9.0"
 # [tool.poetry.group.dev.dependencies]
 # pyinstaller = "^6.10.0"
 pyinstaller = "^6.10.0"
+dmgbuild = "^1.6.2"
+cx-freeze = "^7.2.3"
 
 [build-system]
 requires = ["poetry-core"]

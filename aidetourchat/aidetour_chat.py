@@ -63,7 +63,8 @@ from importlib.metadata import version, PackageNotFoundError
 # determine where the images are for this app:
 if getattr(sys, 'frozen', False):
 	# packaged environment (PyInstaller or similar)
-	base_path = sys._MEIPASS  # points to the temp folder with bundled files
+	# base_path = sys._MEIPASS  # points to the temp folder with bundled files
+	base_path = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.dirname(sys.executable)
 else:
 	# development environment (non-packaged)
 	base_path = os.path.dirname(os.path.abspath(__file__))
