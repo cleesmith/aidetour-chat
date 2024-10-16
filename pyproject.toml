@@ -20,15 +20,13 @@ groq = "^0.11.0"
 mistralai = "^1.1.0"
 ollama = "^0.3.3"
 pyperclip = "^1.9.0"
-# pysocks = "^1.7.1"
-# socks = "^0"
+socks = "^0"
+pysocks = "^1.7.1"
 # pywebview = "^5.2"
 # pythonnet = {version = "^3.0.4", platform = "win32"}
 
 # [tool.poetry.group.dev.dependencies]
 # pyinstaller = "^6.10.0"
-pyinstaller = "^6.10.0"
-dmgbuild = "^1.6.2"
 cx-freeze = "^7.2.3"
 
 [build-system]

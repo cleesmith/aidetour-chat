@@ -1,10 +1,12 @@
 # cd aidetour-chat
-# python setup.py build
+# python setup.py build = works, but weird Terminal console window appears = fail!
+# python setup.py build bdist_mac = works as expected
+# finder: double-click on build/aidetourchat-1.0.app
+# poetry run python setup.py build bdist_mac = works as expected
 
 import sys
 from cx_Freeze import setup, Executable
 
-# Dependencies required by your application
 build_exe_options = {
     "packages": [
         "os", "sys", "nicegui", "uvicorn", "fastapi", "httpx", "tinydb",
@@ -13,7 +15,7 @@ build_exe_options = {
         "google.generativeai", "anthropic", "groq", "mistralai", "ollama", "socks"
     ],
     "include_files": [
-        ("aidetourchat/images/", "images/")  # Include images folder
+        ("aidetourchat/images/", "images/")
     ],
 }
 
@@ -25,6 +27,46 @@ setup(
     executables=[Executable("aidetourchat/aidetour_chat.py", base=None)]
 )
 
+# ... after:
+# python setup.py build bdist_dmg
+# ... to update the app icon in the .dmg:
+# cp AidetourChatIcon.icns build/dist/aidetourchat-1.0.app/Contents/Resources
+# cd build/dist
+# hdiutil create -volname "AidetourChat" -srcfolder aidetourchat-1.0.app -ov -format UDZO aidetourchat-1.0.dmg
+
+
+
+# # dependencies required by your application
+# build_exe_options = {
+#     "packages": [
+#         "os", "sys", "nicegui", "uvicorn", "fastapi", "httpx", "tinydb",
+#         "multiprocessing", "signal", "traceback", "uuid", "re", "time", "datetime",
+#         "asyncio", "collections", "pyperclip", "starlette", "openai",
+#         "google.generativeai", "anthropic", "groq", "mistralai", "ollama", "socks"
+#     ],
+#     "include_files": [
+#         ("aidetourchat/images/", "images/")  # include images folder
+#     ],
+# }
+
+# executables = [
+#     Executable(
+#         "aidetourchat/aidetour_chat.py",
+#         base=None,
+#         target_name="AidetourChat",
+#         icon="AidetourChatIcon.icns",
+#     )
+# ]
+
+# setup(
+#     name="AidetourChat",
+#     version="1.0",
+#     description="Aidetour Chat app",
+#     options={"build_exe": build_exe_options},
+#     # executables=[Executable("aidetourchat/aidetour_chat.py", base=None)]
+#     executables=executables,
+# )
+
 
 # import sys
 # from cx_Freeze import setup, Executable
@@ -33,7 +75,7 @@ setup(
 #     "packages": [
 #         "os", "sys", "nicegui", "uvicorn", "fastapi", "httpx", "tinydb",
 #         "multiprocessing", "signal", "traceback", "uuid", "re", "time", "datetime",
-#         "asyncio", "collections", "pyperclip", "starlette", "webview", "openai",
+#         "asyncio", "collections", "pyperclip", "starlette", "openai",
 #         "google.generativeai", "anthropic", "groq", "mistralai", "ollama", "socks"
 #     ],
 #     "include_files": ["images/"],
