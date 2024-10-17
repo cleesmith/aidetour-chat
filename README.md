@@ -40,3 +40,35 @@
 ---
 
 Get started with Aidetour Chat and bring all your favorite AI models into a single, convenient interface—even when you're offline!
+
+
+---
+
+## Project Layout
+
+```
+tree -f -I 'build|dist' | sed 's|\./||g' | tr '\240' ' '                        
+```
+
+```
+.
+├── AidetourChat.spec
+├── AidetourChatIcon.icns
+├── LICENSE
+├── README.md
+├── aidetour-chat.iss
+├── aidetourchat
+│   ├── aidetourchat/AidetourChatIcon.ico
+│   ├── aidetourchat/__init__.py
+│   ├── aidetourchat/aidetour_chat.py
+│   └── aidetourchat/images
+│       └── aidetourchat/images/Aidetour.png
+├── images
+│   └── images/Aidetour.png
+├── poetry.lock
+├── pyproject.toml
+├── settings.py
+├── setup.py
+├── win_pyproject.toml
+└── win_setup.py
+```
