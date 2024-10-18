@@ -236,10 +236,12 @@ def get_provider_setting(provider, key):
 	setting = provider_defaults.get(key, None)
 	if key == 'timeout' and (setting is None or (isinstance(setting, str) and setting.strip() == "")):
 		setting = 30.0
-	if base_url is None or (isinstance(base_url, str) and base_url.strip() == ""):
-		base_url = None
-	elif base_url.startswith('http://') or base_url.startswith('https://'):
-		base_url = re.sub(r'(?<=https?://)/+', '/', base_url)
+	if key == 'base_url':
+		base_url = provider_defaults.get(key, None)
+		if base_url is None or (isinstance(base_url, str) and base_url.strip() == ""):
+			base_url = None
+		elif base_url.startswith('http://') or base_url.startswith('https://'):
+			base_url = re.sub(r'(?<=https?://)/+', '/', base_url)
 	return setting
 
 def set_provider_setting(provider, key, value):
@@ -386,6 +388,7 @@ async def mistral_models():
 		PROVIDER_MODELS[pm] = sorted_models
 		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
+		print(f"mistral_models:\n{e}\n")
 		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
@@ -516,11 +519,21 @@ async def ollama_models():
 
 async def OpenRouterResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "OpenRouter"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_base_url = get_provider_setting(pm, 'base_url')
+	if provider_base_url is None or provider_base_url.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = OpenAI(
-		  base_url="https://openrouter.ai/api/v1",
-		  api_key=get_provider_setting('OpenRouter', 'api_key'), 
-		  timeout=30.0,
+		  base_url=provider_base_url,
+		  api_key=provider_api_key, 
+		  timeout=provider_timeout,
 		  max_retries=0,
 		)
 		params = {
@@ -548,11 +561,21 @@ async def OpenRouterResponseStreamer(prompt):
 
 async def PerplexityResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Perplexity"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_base_url = get_provider_setting(pm, 'base_url')
+	if provider_base_url is None or provider_base_url.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = OpenAI(
-			base_url="https://api.perplexity.ai",
-			api_key=get_provider_setting('Perplexity', 'api_key'), 
-			timeout=30.0,
+			base_url=provider_base_url,
+			api_key=provider_api_key, 
+			timeout=provider_timeout,
 			max_retries=0,
 		)
 		params = {
@@ -580,10 +603,16 @@ async def PerplexityResponseStreamer(prompt):
 
 async def MistralResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Mistral"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = MistralClient(
-			api_key=get_provider_setting('Mistral', 'api_key'), 
-			timeout=60,
+			api_key=provider_api_key, 
+			timeout=provider_timeout,
 			max_retries=0, 
 		)
 		params = {
@@ -610,8 +639,14 @@ async def MistralResponseStreamer(prompt):
 
 async def OpenAIResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "OpenAI"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
-		client = OpenAI(api_key=get_provider_setting('OpenAI', 'api_key'))
+		client = OpenAI(api_key=provider_api_key)
 		params = {
 			"model": MODEL,
 			"messages": [{"role": "user", "content": prompt}],
@@ -637,11 +672,15 @@ async def OpenAIResponseStreamer(prompt):
 
 async def GoogleResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Google"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
-		genai.configure(api_key=get_provider_setting('Google', 'api_key'))
-		model = genai.GenerativeModel(
-			model_name=MODEL,
-		)
+		genai.configure(api_key=provider_api_key)
+		model = genai.GenerativeModel(model_name=MODEL)
 		# safety_settings = {
 		#   'HARM_CATEGORY_HATE_SPEECH': HarmBlockThreshold.BLOCK_NONE,
 		#   'HARM_CATEGORY_HARASSMENT': HarmBlockThreshold.BLOCK_NONE,
@@ -656,10 +695,8 @@ async def GoogleResponseStreamer(prompt):
 			params["generation_config"] = {
 				"temperature": TEMP,
 			}
-		# request_options={"timeout": 30},
-		timeout = get_provider_setting('Google', 'timeout')
-		if timeout is not None:
-			params["request_options"] = {"timeout": timeout}
+		if provider_timeout is not None:
+			params["request_options"] = {"timeout": provider_timeout}
 		stream = model.generate_content(
 			prompt,
 			stream=True,
@@ -683,10 +720,16 @@ async def GoogleResponseStreamer(prompt):
 
 async def AnthropicResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Anthropic"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = anthropic.Anthropic(
-			api_key=get_provider_setting('Anthropic', 'api_key'),
-			timeout=30,
+			api_key=provider_api_key,
+			timeout=provider_timeout,
 			max_retries=0,
 		)
 		params = {
@@ -709,16 +752,23 @@ async def AnthropicResponseStreamer(prompt):
 					yield "" # handle None or any unexpected type by yielding an empty string
 
 	except Exception as e:
+		print(e)
 		yield f"Error:\nAnthropic's response for model: {MODEL}\n{e}"
 
 
 async def GroqResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Groq"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = AsyncGroq(
-			api_key=get_provider_setting('Groq', 'api_key'), 
+			api_key=get_provider_setting(pm, 'api_key'), 
+			timeout=provider_timeout,
 			max_retries=0, 
-			timeout=30.0,
 		)
 		params = {
 			"model": MODEL,
@@ -750,11 +800,21 @@ async def GroqResponseStreamer(prompt):
 
 async def LMStudioResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "LMStudio"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_base_url = get_provider_setting(pm, 'base_url')
+	if provider_base_url is None or provider_base_url.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = OpenAI(
-			base_url="http://localhost:5506/v1", 
-			api_key="lm-studio", 
-			timeout=60.0,
+			base_url=provider_base_url, 
+			api_key=provider_api_key, 
+			timeout=provider_timeout,
 			max_retries=0, 
 		)
 		params = {
@@ -782,6 +842,7 @@ async def LMStudioResponseStreamer(prompt):
 
 async def OllamaResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	pm = "Ollama"
 	provider_api_key = get_provider_setting(pm, 'api_key')
 	if provider_api_key is None or provider_api_key.strip() == "":
 		PROVIDERS.remove(pm) if pm in PROVIDERS else None
@@ -794,6 +855,7 @@ async def OllamaResponseStreamer(prompt):
 	try:
 		client = OllamaClient(
 			host=provider_base_url,
+			api_key=provider_api_key, 
 			timeout=provider_timeout,
 		)
 		params = {
