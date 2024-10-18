@@ -233,7 +233,14 @@ def get_provider_setting(provider, key):
 		if setting == "": setting = None
 		return setting
 	provider_defaults = next((p['defaults'] for p in PROVIDERS_SETTINGS if p['name'] == provider), {})
-	return provider_defaults.get(key, None) # "")
+	setting = provider_defaults.get(key, None)
+	if key == 'timeout' and (setting is None or (isinstance(setting, str) and setting.strip() == "")):
+		setting = 30.0
+	if base_url is None or (isinstance(base_url, str) and base_url.strip() == ""):
+		base_url = None
+	elif base_url.startswith('http://') or base_url.startswith('https://'):
+		base_url = re.sub(r'(?<=https?://)/+', '/', base_url)
+	return setting
 
 def set_provider_setting(provider, key, value):
 	db = TinyDB(SETTINGS_FILE_PATH)
@@ -253,6 +260,7 @@ def set_provider_setting(provider, key, value):
 # **********************
 
 async def aidetour_models():
+	global PROVIDER_MODELS, PROVIDERS
 	PROVIDER_MODELS["Aidetour"] = [
 		"Insert a Note",
 		"Info",
@@ -261,6 +269,7 @@ async def aidetour_models():
 	return len(PROVIDER_MODELS["Aidetour"])
 
 async def anthropic_models():
+	global PROVIDER_MODELS, PROVIDERS
 	provider_api_key = get_provider_setting('Anthropic', 'api_key')
 	if provider_api_key is None or provider_api_key.strip() == "":
 		PROVIDERS.remove("Anthropic") if "Anthropic" in PROVIDERS else None
@@ -275,6 +284,7 @@ async def anthropic_models():
 	return len(PROVIDER_MODELS["Anthropic"])
 
 async def perplexity_models():
+	global PROVIDER_MODELS, PROVIDERS
 	provider_api_key = get_provider_setting('Perplexity', 'api_key')
 	if provider_api_key is None or provider_api_key.strip() == "":
 		PROVIDERS.remove("Perplexity") if "Perplexity" in PROVIDERS else None
@@ -292,146 +302,187 @@ async def perplexity_models():
 	return len(PROVIDER_MODELS["Perplexity"])
 
 async def groq_models():
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "Groq"
 	try:
-		provider_api_key = get_provider_setting('Groq', 'api_key')
+		provider_api_key = get_provider_setting(pm, 'api_key')
 		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove("Groq") if "Groq" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0
+		provider_timeout = get_provider_setting(pm, 'timeout')
 		client = Groq(
 			api_key=provider_api_key,
+			timeout=provider_timeout,
 			max_retries=0, 
-			timeout=30.0,
 		)
 		models = client.models.list()
 		model_ids = [model.id for model in models.data if 'whisper' not in model.id.lower()]
 		sorted_models = sorted(model_ids)
-		PROVIDER_MODELS["Groq"] = sorted_models
-		return len(PROVIDER_MODELS["Groq"])
+		PROVIDER_MODELS[pm] = sorted_models
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("Groq") if "Groq" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 async def google_models():
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "Google"
 	try:
-		provider_api_key = get_provider_setting('Google', 'api_key')
+		provider_api_key = get_provider_setting(pm, 'api_key')
 		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove("Google") if "Google" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0 # ignore when no api key
 		genai.configure(api_key=provider_api_key)
 		chat_models = []
-		for model in genai.list_models(request_options={"timeout": 10}):
+		provider_timeout = get_provider_setting(pm, 'timeout')
+		for model in genai.list_models(request_options={"timeout": provider_timeout}):
 			chat_models.append(model.name)
 		sorted_models = sorted(chat_models)
-		PROVIDER_MODELS["Google"] = sorted_models
-		return len(PROVIDER_MODELS["Google"])
+		PROVIDER_MODELS[pm] = sorted_models
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("Google") if "Google" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 async def openai_models():
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "OpenAI"
 	try:
-		provider_api_key = get_provider_setting('OpenAI', 'api_key')
+		provider_api_key = get_provider_setting(pm, 'api_key')
 		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove("OpenAI") if "OpenAI" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0
+		provider_timeout = get_provider_setting(pm, 'timeout')
 		client = OpenAI(
 			api_key=provider_api_key,
+			timeout=provider_timeout,
 			max_retries=0, 
-			timeout=30.0,
 		)
 		models = client.models.list()
 		chat_models = [model for model in models.data if model.id.startswith("gpt")]
 		sorted_chat_models = sorted(chat_models, key=lambda x: x.created, reverse=True)
 		openai_model_ids = [model.id for model in sorted_chat_models if "gpt" in model.id]
-		PROVIDER_MODELS["OpenAI"] = openai_model_ids
-		return len(PROVIDER_MODELS["OpenAI"])
+		PROVIDER_MODELS[pm] = openai_model_ids
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("OpenAI") if "OpenAI" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 async def mistral_models():
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "Mistral"
 	try:
-		provider_api_key = get_provider_setting('Mistral', 'api_key')
+		provider_api_key = get_provider_setting(pm, 'api_key')
 		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove("Mistral") if "Mistral" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0
-		client = MistralClient(api_key=provider_api_key)
+		provider_timeout = get_provider_setting(pm, 'timeout')
+		client = MistralClient(
+			api_key=provider_api_key,
+		)
 		list_models_response = client.list_models()
 		model_ids = [model.id for model in list_models_response.data]
 		sorted_models = sorted(model_ids)
-		PROVIDER_MODELS["Mistral"] = sorted_models
-		return len(PROVIDER_MODELS["Mistral"])
+		PROVIDER_MODELS[pm] = sorted_models
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("Mistral") if "Mistral" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 async def openrouter_models():
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "OpenRouter"
 	try:
-		provider_api_key = get_provider_setting('OpenRouter', 'api_key')
+		provider_api_key = get_provider_setting(pm, 'api_key')
 		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove("OpenRouter") if "OpenRouter" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0
+		provider_base_url = get_provider_setting(pm, 'base_url')
+		if provider_base_url is None or provider_base_url.strip() == "":
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
+			return 0
+		provider_timeout = get_provider_setting(pm, 'timeout')
 		client = OpenAI(
-			base_url="https://openrouter.ai/api/v1",
+			base_url=provider_base_url,
 			api_key=provider_api_key,
+			timeout=provider_timeout,
 			max_retries=0,
-			timeout=30.0
 		)
 		models = client.models.list()
 		model_ids = [model.id for model in models.data]
 		sorted_models = sorted(model_ids)
-		PROVIDER_MODELS["OpenRouter"] = sorted_models
-		return len(PROVIDER_MODELS["OpenRouter"])
+		PROVIDER_MODELS[pm] = sorted_models
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("OpenRouter") if "OpenRouter" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 async def lm_studio_models():
-	global PROVIDER_MODELS
+	global PROVIDER_MODELS, PROVIDERS
+	pm = "LMStudio"
 	try:
-		# api_key isn't required, so try to connect = very fast
+		provider_api_key = get_provider_setting(pm, 'api_key')
+		if provider_api_key is None or provider_api_key.strip() == "":
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
+			return 0
+		provider_base_url = get_provider_setting(pm, 'base_url')
+		if provider_base_url is None or provider_base_url.strip() == "":
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
+			return 0
+		provider_timeout = get_provider_setting(pm, 'timeout')
 		client = OpenAI(
-			base_url="http://localhost:5506/v1", 
-			api_key="lm-studio", 
+			base_url=provider_base_url,
+			api_key=provider_api_key,
+			timeout=provider_timeout,
 			max_retries=0, 
-			timeout=10
 		)
 		models = client.models.list()
 		chat_models = [model.id for model in models.data if model.id]
 		# usually 1 or too few to bother sorting them
-		PROVIDER_MODELS["LMStudio"] = chat_models
-		return len(PROVIDER_MODELS["LMStudio"])
+		PROVIDER_MODELS[pm] = chat_models
+		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
-		PROVIDERS.remove("LMStudio") if "LMStudio" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0 # isn't running which is ok
 
 async def ollama_models():
 	global PROVIDER_MODELS, PROVIDERS
+	pm = "Ollama"
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		return 0
+	provider_base_url = get_provider_setting(pm, 'base_url')
+	if provider_base_url is None or provider_base_url.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		return 0
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	is_up = False
 	try:
-		is_up = httpx.get("http://localhost:11434/v1/models", timeout=20).status_code == 200
+		url = f"http://{provider_base_url}/v1/models"
+		is_up = httpx.get(url, timeout=provider_timeout).status_code == 200
 	except Exception:
 		is_up = False
 	if not is_up:
-		PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 	try:
 		client = OpenAI(
-			base_url="http://localhost:11434/v1",
-			api_key="ollama",
-			timeout=10,
-			max_retries=0
+			base_url=provider_base_url,
+			api_key=provider_api_key,
+			timeout=provider_timeout,
+			max_retries=0,
 		)
 		try:
 			models = client.models.list()
 			chat_models = [model.id for model in models.data if model.id]
-			PROVIDER_MODELS["Ollama"] = chat_models
-			return len(PROVIDER_MODELS["Ollama"])
+			PROVIDER_MODELS[pm] = chat_models
+			return len(PROVIDER_MODELS[pm])
 		except Exception as e:
-			PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
+			PROVIDERS.remove(pm) if pm in PROVIDERS else None
 			return 0
 	except Exception as e:
-		PROVIDERS.remove("Ollama") if "Ollama" in PROVIDERS else None
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
 # *********************************
@@ -469,8 +520,8 @@ async def OpenRouterResponseStreamer(prompt):
 		client = OpenAI(
 		  base_url="https://openrouter.ai/api/v1",
 		  api_key=get_provider_setting('OpenRouter', 'api_key'), 
+		  timeout=30.0,
 		  max_retries=0,
-		  timeout=30.0
 		)
 		params = {
 			"model": MODEL,
@@ -501,8 +552,8 @@ async def PerplexityResponseStreamer(prompt):
 		client = OpenAI(
 			base_url="https://api.perplexity.ai",
 			api_key=get_provider_setting('Perplexity', 'api_key'), 
+			timeout=30.0,
 			max_retries=0,
-			timeout=30.0
 		)
 		params = {
 			"model": MODEL,
@@ -532,8 +583,8 @@ async def MistralResponseStreamer(prompt):
 	try:
 		client = MistralClient(
 			api_key=get_provider_setting('Mistral', 'api_key'), 
+			timeout=60,
 			max_retries=0, 
-			timeout=60
 		)
 		params = {
 			"model": MODEL,
@@ -700,10 +751,11 @@ async def GroqResponseStreamer(prompt):
 async def LMStudioResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
 	try:
-		client = OpenAI(base_url="http://localhost:5506/v1", 
+		client = OpenAI(
+			base_url="http://localhost:5506/v1", 
 			api_key="lm-studio", 
-			max_retries=0, 
 			timeout=60.0,
+			max_retries=0, 
 		)
 		params = {
 			"model": MODEL,
@@ -730,10 +782,19 @@ async def LMStudioResponseStreamer(prompt):
 
 async def OllamaResponseStreamer(prompt):
 	if MODEL is None: yield ""; return # sometimes model list is empty
+	provider_api_key = get_provider_setting(pm, 'api_key')
+	if provider_api_key is None or provider_api_key.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_base_url = get_provider_setting(pm, 'base_url')
+	if provider_base_url is None or provider_base_url.strip() == "":
+		PROVIDERS.remove(pm) if pm in PROVIDERS else None
+		yield ""; return
+	provider_timeout = get_provider_setting(pm, 'timeout')
 	try:
 		client = OllamaClient(
-			host='http://localhost:11434',
-			timeout=30,
+			host=provider_base_url,
+			timeout=provider_timeout,
 		)
 		params = {
 			"model": MODEL,
@@ -1293,7 +1354,7 @@ async def _main_page(request: Request) -> None:
 					ui.textarea(label="Prompt:", placeholder="Enter your prompt here...")
 					.classes("w-full")
 					.props("clearable")
-					.props("rows=3")
+					.props("rows=2")
 					.props("spellcheck=false")
 					.props("autocomplete=off")
 					.props("autocorrect=off")
@@ -1544,7 +1605,15 @@ async def _main_page(request: Request) -> None:
 										.props("autocomplete=off") \
 										.props("autocorrect=off")
 
-										if provider_name in ['OpenRouter', 'Perplexity', 'LMStudio']:
+										inputs['timeout'] = ui.input(
+											label='Timeout', 
+											value=get_provider_setting(provider_name, 'timeout')) \
+										.classes('w-full mb-2') \
+										.props("spellcheck=false") \
+										.props("autocomplete=off") \
+										.props("autocorrect=off")
+
+										if provider_name in ['Ollama', 'OpenRouter', 'Perplexity', 'LMStudio']:
 											inputs['base_url'] = ui.input(
 												label='Base URL', 
 												value=get_provider_setting(provider_name, 'base_url')) \
@@ -1557,15 +1626,6 @@ async def _main_page(request: Request) -> None:
 											inputs['max_tokens'] = ui.input(
 												label='Max Tokens', 
 												value=get_provider_setting(provider_name, 'max_tokens')) \
-											.classes('w-full mb-2') \
-											.props("spellcheck=false") \
-											.props("autocomplete=off") \
-											.props("autocorrect=off")
-
-										if provider_name in ['OpenRouter', 'LMStudio', 'Perplexity', 'Mistral']:
-											inputs['timeout'] = ui.input(
-												label='Timeout', 
-												value=get_provider_setting(provider_name, 'timeout')) \
 											.classes('w-full mb-2') \
 											.props("spellcheck=false") \
 											.props("autocomplete=off") \
