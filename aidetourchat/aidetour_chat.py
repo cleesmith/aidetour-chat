@@ -44,9 +44,6 @@ import anthropic
 from groq import Groq
 from groq import AsyncGroq
 
-import mistralai
-from mistralai.client import MistralClient
-
 import ollama
 from ollama import Client as OllamaClient
 
@@ -54,7 +51,6 @@ from openai import __version__ as oav
 from anthropic import __version__ as av
 from google.generativeai import __version__ as ggv
 from groq import __version__ as gv
-# from mistralai import __version__ as mv
 # from ollama import __version__ as ov
 
 from importlib.metadata import version, PackageNotFoundError
@@ -129,7 +125,6 @@ PROVIDERS = [
 	"Google",
 	"Groq",
 	"LMStudio",
-	"Mistral",
 	"Ollama",
 	"OpenAI",
 	"OpenRouter",
@@ -143,7 +138,6 @@ PROVIDERS_SETTINGS = [
 	{"name": "Google", "defaults": {"api_key": "", "timeout": 30}},
 	{"name": "Groq", "defaults": {"api_key": "", "timeout": 30}},
 	{"name": "LMStudio", "defaults": {"api_key": "", "base_url": "http://localhost:5506/v1", "timeout": 30}},
-	{"name": "Mistral", "defaults": {"api_key": "", "timeout": 30}},
 	{"name": "Ollama", "defaults": {"api_key": "", "base_url": "http://localhost:11434", "timeout": 30}},
 	{"name": "OpenAI", "defaults": {"api_key": "", "timeout": 30}},
 	{"name": "OpenRouter", "defaults": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
@@ -153,10 +147,6 @@ PROVIDERS_SETTINGS = [
 APP_DB_SETTINGS = {}
 PROVIDER_DB_SETTINGS = defaultdict(dict)
 
-try:
-	mv = version('mistralai')
-except PackageNotFoundError:
-	mv = 'unknown'
 try:
 	ov = version('ollama')
 except PackageNotFoundError:
@@ -228,21 +218,26 @@ def set_app_setting(key, value):
 	db.close()
 
 def get_provider_setting(provider, key):
-	if provider in PROVIDER_DB_SETTINGS and key in PROVIDER_DB_SETTINGS[provider]:
-		setting = PROVIDER_DB_SETTINGS[provider][key]
-		if setting == "": setting = None
-		return setting
-	provider_defaults = next((p['defaults'] for p in PROVIDERS_SETTINGS if p['name'] == provider), {})
-	setting = provider_defaults.get(key, None)
-	if key == 'timeout' and (setting is None or (isinstance(setting, str) and setting.strip() == "")):
-		setting = 30.0
-	if key == 'base_url':
-		base_url = provider_defaults.get(key, None)
-		if base_url is None or (isinstance(base_url, str) and base_url.strip() == ""):
-			base_url = None
-		elif base_url.startswith('http://') or base_url.startswith('https://'):
-			base_url = re.sub(r'(?<=https?://)/+', '/', base_url)
-	return setting
+    if provider in PROVIDER_DB_SETTINGS and key in PROVIDER_DB_SETTINGS[provider]:
+        setting = PROVIDER_DB_SETTINGS[provider][key]
+        if setting == "":
+            setting = None
+        return setting
+
+    provider_defaults = next((p['defaults'] for p in PROVIDERS_SETTINGS if p['name'] == provider), {})
+    setting = provider_defaults.get(key, None)
+
+    if key == 'timeout' and (setting is None or (isinstance(setting, str) and setting.strip() == "")):
+        setting = 30.0
+
+    if key == 'base_url':
+        base_url = provider_defaults.get(key, None)
+        if base_url is None or (isinstance(base_url, str) and base_url.strip() == ""):
+            base_url = None
+        elif base_url.startswith('http://') or base_url.startswith('https://'):
+            base_url = re.sub(r'((https?://))/+', r'\1', base_url)
+
+    return setting
 
 def set_provider_setting(provider, key, value):
 	db = TinyDB(SETTINGS_FILE_PATH)
@@ -370,28 +365,6 @@ async def openai_models():
 		PROVIDERS.remove(pm) if pm in PROVIDERS else None
 		return 0
 
-async def mistral_models():
-	global PROVIDER_MODELS, PROVIDERS
-	pm = "Mistral"
-	try:
-		provider_api_key = get_provider_setting(pm, 'api_key')
-		if provider_api_key is None or provider_api_key.strip() == "":
-			PROVIDERS.remove(pm) if pm in PROVIDERS else None
-			return 0
-		provider_timeout = get_provider_setting(pm, 'timeout')
-		client = MistralClient(
-			api_key=provider_api_key,
-		)
-		list_models_response = client.list_models()
-		model_ids = [model.id for model in list_models_response.data]
-		sorted_models = sorted(model_ids)
-		PROVIDER_MODELS[pm] = sorted_models
-		return len(PROVIDER_MODELS[pm])
-	except Exception as e:
-		print(f"mistral_models:\n{e}\n")
-		PROVIDERS.remove(pm) if pm in PROVIDERS else None
-		return 0
-
 async def openrouter_models():
 	global PROVIDER_MODELS, PROVIDERS
 	pm = "OpenRouter"
@@ -502,16 +475,13 @@ async def ollama_models():
 3. Groq
 	https://console.groq.com/docs/api-reference#chat-create
 	temp = 1  0-2
-4. Mistral
-	https://docs.mistral.ai/api/#tag/chat/operation/chat_completion_v1_chat_completions_post
-	temp = 0.7  0-1.5
-5. OpenAI
+4. OpenAI
 	https://platform.openai.com/docs/api-reference/chat/create
 	temp = 1  0-2
-6. OpenRouter
+5. OpenRouter
 	https://openrouter.ai/docs/parameters
 	temp = 1.0  0.0-2.0
-7. Perplexity
+6. Perplexity
 	https://docs.perplexity.ai/api-reference/chat-completions
 	temp = 0.2  0.0-2.0
 '''
@@ -599,42 +569,6 @@ async def PerplexityResponseStreamer(prompt):
 				yield ""  # handle None or any unexpected type by yielding an empty string
 	except Exception as e:
 		yield f"Error:\nPerplexity's response for model: {MODEL}\n{e}"
-
-
-async def MistralResponseStreamer(prompt):
-	if MODEL is None: yield ""; return # sometimes model list is empty
-	pm = "Mistral"
-	provider_api_key = get_provider_setting(pm, 'api_key')
-	if provider_api_key is None or provider_api_key.strip() == "":
-		PROVIDERS.remove(pm) if pm in PROVIDERS else None
-		yield ""; return
-	provider_timeout = get_provider_setting(pm, 'timeout')
-	try:
-		client = MistralClient(
-			api_key=provider_api_key, 
-			timeout=provider_timeout,
-			max_retries=0, 
-		)
-		params = {
-			"model": MODEL,
-			"messages": [{"role": "user", "content": prompt}],
-		}
-		if TEMP is not None: params["temperature"] = TEMP
-		stream = client.chat_stream(**params)
-		for chunk in stream:
-			if ABORT:
-				set_abort(False)
-				yield f"\n... response stopped by button click."
-				stream.close()  # properly close the generator
-				break  # exit the generator cleanly
-			content = chunk.choices[0].delta.content
-			if isinstance(content, str):
-				cleaned_content = content.replace("**", "") # no ugly Markdown in plain text
-				yield cleaned_content
-			else:
-				yield ""  # handle None or any unexpected type by yielding an empty string
-	except Exception as e:
-		yield f"Error:\nMistral's response for model: {MODEL}\n{e}"
 
 
 async def OpenAIResponseStreamer(prompt):
@@ -917,7 +851,6 @@ async def AidetourResponseStreamer(prompt):
 		anthropic_version = av
 		genai_version = ggv
 		groq_version = gv
-		mistralai_version = mv
 		ollama_version = ov
 		openai_version = oav
 		yield f"\n\n--- Software Versions ---\n"
@@ -930,9 +863,8 @@ async def AidetourResponseStreamer(prompt):
 		yield f"1. Anthropic: {anthropic_version}\n"
 		yield f"2. Google Generativeai: {genai_version}\n"
 		yield f"3. Groq: {groq_version}\n"
-		yield f"4. MistralAI: {mistralai_version}\n"
-		yield f"5. Ollama: {ollama_version}\n"
-		yield f"6. OpenAI: {openai_version}\n"
+		yield f"4. Ollama: {ollama_version}\n"
+		yield f"5. OpenAI: {openai_version}\n"
 		yield "\nSaved chat histories for this session:\n"
 		if not SAVED_CHAT_HISTORIES:
 			yield "nothing\n"
@@ -978,7 +910,6 @@ STREAMER_MAP = {
 	"Anthropic": AnthropicResponseStreamer,
 	"Google": GoogleResponseStreamer,
 	"Groq": GroqResponseStreamer,
-	"Mistral": MistralResponseStreamer,
 	"OpenAI": OpenAIResponseStreamer,
 	"OpenRouter": OpenRouterResponseStreamer,
 	"Perplexity": PerplexityResponseStreamer,
@@ -1322,7 +1253,7 @@ async def _main_page(request: Request) -> None:
 				"<style> .prevent-uppercase { text-transform: none !important; } </style>"
 			)
 
-			with ui.column().classes("flex-1 w-1/3 p-0 ml-15").style('transform: scale(0.85);'):
+			with ui.column().classes("flex-1 w-1/3 p-0 ml-0"): #.style('transform: scale(0.85);'):
 				provider_select = (
 					ui.select(
 						PROVIDERS,
@@ -1330,7 +1261,7 @@ async def _main_page(request: Request) -> None:
 						value=PROVIDER,
 						on_change=lambda e: update_model_choices(),
 					)
-					.classes("w-48 prevent-uppercase")
+					.classes("prevent-uppercase")
 					.bind_value(globals(), "PROVIDER")  # bind the selected value to the global PROVIDER variable
 				)
 
@@ -1712,8 +1643,6 @@ async def _main_page(request: Request) -> None:
 		append_splash_text(model_log, providers_models, f"Groq offers {model_count} models.")
 		model_count = await lm_studio_models()
 		append_splash_text(model_log, providers_models, f"LM Studio offers {model_count} models.")
-		model_count = await mistral_models()
-		append_splash_text(model_log, providers_models, f"Mistral offers {model_count} models.")
 		model_count = await openai_models()
 		append_splash_text(model_log, providers_models, f"OpenAI offers {model_count} models.")
 		model_count = await ollama_models()
