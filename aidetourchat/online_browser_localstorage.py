@@ -1,8 +1,15 @@
 from nicegui import app, ui, events
 import json
 import base64
+from collections import defaultdict
 
-PROVIDERS_SETTINGS = [
+APP_SETTINGS = {
+    'host': '127.0.0.1',
+    'port': 8000,
+    'dark_mode': True
+}
+
+PROVIDER_SETTINGS = [
     {"name": "Anthropic", "defaults": {"api_key": "", "max_tokens": 4096, "timeout": 30}},
     {"name": "Google", "defaults": {"api_key": "", "timeout": 30}},
     {"name": "Groq", "defaults": {"api_key": "", "timeout": 30}},
@@ -15,46 +22,47 @@ PROVIDERS_SETTINGS = [
 
 @ui.page('/', response_timeout=999)
 async def _main_page() -> None:
+    global APP_SETTINGS, PROVIDER_SETTINGS
 
     with ui.dialog().props('full-width') as dialog:
         with ui.card():
             content = ui.markdown()
 
     def read_settings_from_storage():
-        APP_DB_SETTINGS = app.storage.user.get('app_settings', {})
-        PROVIDER_DB_SETTINGS = app.storage.user.get('provider_settings', {})
-        return APP_DB_SETTINGS, PROVIDER_DB_SETTINGS
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        APP_SETTINGS = app.storage.user.get('app_settings', {})
+        PROVIDER_SETTINGS = app.storage.user.get('provider_settings', {})
 
     def set_app_setting(key, value):
-        settings = app.storage.user.get('app_settings', {})
-        settings[key] = value
-        app.storage.user['app_settings'] = settings
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        # APP_SETTINGS = app.storage.user.get('app_settings', {})
+        APP_SETTINGS[key] = value
+        app.storage.user['app_settings'] = APP_SETTINGS
 
-    def set_provider_setting(provider, key, value):
-        provider_settings = app.storage.user.get('provider_settings', {})
-        if provider not in provider_settings:
-            provider_settings[provider] = {}
-        provider_settings[provider][key] = value
-        app.storage.user['provider_settings'] = provider_settings
+    def set_provider_setting(provider_name, key, value):
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        print("set_provider_setting:")
+        print(provider_name, key, value)
+        print()
+        # PROVIDER_SETTINGS = app.storage.user.get('provider_settings', {})
+        # if provider not in PROVIDER_SETTINGS:
+        #     PROVIDER_SETTINGS[provider] = {}
+        # PROVIDER_SETTINGS[provider][key] = value
+        for provider in PROVIDER_SETTINGS:
+                if provider["name"] == provider_name:
+                    provider["defaults"][key] = value
+                    break
+        app.storage.user['provider_settings'] = PROVIDER_SETTINGS
 
     def get_provider_setting(provider, key):
+        global APP_SETTINGS, PROVIDER_SETTINGS
         provider_settings = app.storage.user.get('provider_settings', {})
         if provider in provider_settings and key in provider_settings[provider]:
             return provider_settings[provider][key]
         return None
 
-    # def upload_settings(e):
-    #     content = json.loads(e.content.read().decode('utf-8'))
-    #     print(f"\n{content}\n")
-    #     app.storage.user['app_settings'] = content.get('app_settings', {})
-    #     app.storage.user['provider_settings'] = content.get('provider_settings', {})
-
-    # def upload_settings(e: events.UploadEventArguments):
-    #     text = e.content.read().decode('utf-8')
-    #     content.set_content(text)
-    #     dialog.open()
-
     def upload_settings(e: events.UploadEventArguments):
+        global APP_SETTINGS, PROVIDER_SETTINGS
         text = e.content.read().decode('utf-8')
         settings = json.loads(text)
         print(f"\nsettings:\n{settings}\n")
@@ -71,17 +79,18 @@ async def _main_page() -> None:
         dialog.open()
 
     def initialize_default_settings():
-        # Set default app settings
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        set_app_setting('host', '127.0.0.1')
+        set_app_setting('port', 8000)
         set_app_setting('dark_mode', True)
-        set_app_setting('language', 'English')
-        set_app_setting('font_size', 14)
 
-        # Set default provider settings
-        for provider in PROVIDERS_SETTINGS:
+        # PROVIDER_SETTINGS = defaultdict(dict)
+        print(f"initialize_default_settings: PROVIDER_SETTINGS:\n{PROVIDER_SETTINGS}")
+        for provider in PROVIDER_SETTINGS:
+            print(f"provider={provider}")
             name = provider['name']
             defaults = provider['defaults']
-            # You can customize these default values as needed
-            set_provider_setting(name, 'api_key', f'default_key_for_{name}')
+            set_provider_setting(name, 'api_key', "")
             if 'base_url' in defaults:
                 set_provider_setting(name, 'base_url', defaults['base_url'])
             if 'timeout' in defaults:
@@ -90,10 +99,11 @@ async def _main_page() -> None:
                 set_provider_setting(name, 'max_tokens', defaults['max_tokens'])
 
     def download_settings():
-        app_settings, provider_settings = read_settings_from_storage()
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        # app_settings, provider_settings = read_settings_from_storage()
         settings = {
-            'app_settings': app_settings,
-            'provider_settings': provider_settings
+            'app_settings': APP_SETTINGS,
+            'provider_settings': PROVIDER_SETTINGS
         }
         content = json.dumps(settings, indent=4)
 
@@ -132,7 +142,28 @@ async def _main_page() -> None:
         #     URL.revokeObjectURL(url);
         # """)
 
+    print('before: read_settings_from_storage:')
+    print('APP_SETTINGS', APP_SETTINGS)
+    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
+    print()
+    # read_settings_from_storage()
+    # print('before: read_settings_from_storage:')
+    # print('APP_SETTINGS', APP_SETTINGS)
+    # print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
+    # print()
+
+    print("app.storage.user:")
+    print(app.storage.user)
+
+    print('before: initialize_default_settings:')
+    print('APP_SETTINGS', APP_SETTINGS)
+    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
+    print()
     initialize_default_settings()
+    print('after: initialize_default_settings:')
+    print('APP_SETTINGS', APP_SETTINGS)
+    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
+    print()
 
     ui.button('Download Settings', on_click=download_settings)
     ui.button('Download Conversation', on_click=download_conversation)
@@ -141,8 +172,9 @@ async def _main_page() -> None:
 
 
     def edit_provider_settings():
+        global APP_SETTINGS, PROVIDER_SETTINGS
         provider_settings = app.storage.user.get('provider_settings', {})
-        for provider in PROVIDERS_SETTINGS:
+        for provider in PROVIDER_SETTINGS:
             name = provider['name']
             defaults = provider['defaults']
             current_settings = provider_settings.get(name, defaults)
@@ -160,10 +192,11 @@ async def _main_page() -> None:
 
 if __name__ == '__main__':
     ui.run(
+        host="127.0.0.1",
+        port=8010,
         title="AidetourChat",
         reload=False,
         show_welcome_message=False,
         show=True,
         storage_secret='clsxxx',
     )
-

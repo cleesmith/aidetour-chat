@@ -419,7 +419,7 @@ async def lm_studio_models():
 		return len(PROVIDER_MODELS[pm])
 	except Exception as e:
 		PROVIDERS.remove(pm) if pm in PROVIDERS else None
-		return 0 # isn't running which is ok
+		return 0 # isn't up which is ok
 
 async def ollama_models():
 	global PROVIDER_MODELS, PROVIDERS
@@ -934,7 +934,7 @@ async def run_streamer(provider, prompt):
 async def busy_page():
 	ui.separator()
 	ui.label(
-		"Aidetour Chat is currently in use by another user or running in an existing session."
+		"Aidetour Chat only does one user at a time!"
 	)
 	ui.separator()
 	ui.label(
@@ -953,7 +953,9 @@ async def make_a_splash():
 		splash_popup.classes("blur(4px)")
 		with splash_popup, ui.card().classes("w-96"):
 			ui.image("/images/Aidetour.png").classes("w-64 h-64 mx-auto")
-			ui.label("Welcome to Aidetour Chat").classes("text-2xl font-bold text-center mt-2")
+			ui.label("Welcome to Aidetour Chat at:").classes("text-2xl font-bold text-center mt-2")
+			for url in app.urls:
+				ui.link(url, target=url)
 			with ui.row().classes("justify-center mt-2"):
 				ui.spinner('grid', size='sm')
 				ui.label("Please standby . . .").classes("text-red text-sm text-center mt-2 ml-2")
@@ -1440,7 +1442,7 @@ async def _main_page(request: Request) -> None:
 					'________________ No AI providers were discovered! ______________ \n'
 					'Please click on Chat Settings to add/change AI provider API keys, \n'
 					'or if you are using Ollama or LM Studio  \n'
-					'ensure both/either are running before starting Aidetour Chat. \n'
+					'ensure both/either are up before starting Aidetour Chat. \n'
 					'Chat Settings is the gear icon in the button bar below.',
 					multi_line=True,
 					classes='multi-line-notification',
@@ -1716,6 +1718,7 @@ def main():
 		print(f"\tSETTINGS_FILE_PATH: {SETTINGS_FILE_PATH}")
 		print(f"\tLOG_PATH: {LOG_PATH}\n")
 
+		# ui.run(on_air=True, reload=False, show=False)
 		ui.run(
 			host=HOST,
 			port=PORT,
@@ -1731,8 +1734,8 @@ def main():
 		os._exit() # closes terminal
 
 
-# if __name__ in {"__main__", "__mp_main__"}:
-if __name__ == '__main__':
+# if __name__ == '__main__':
+if __name__ in {"__main__", "__mp_main__"}:
 	# freeze_support()  # noqa
 	# the above is related to macOS packaging, see:
 	# Package for Installation in NiceGUI's doc's at
@@ -1741,24 +1744,24 @@ if __name__ == '__main__':
 	# the following works for 'native=True' mode, as 
 	# this code is trying to be more like a desktop app 
 	# with only a single user (a personal server) with 
-	# no login and only 1 running instance;
+	# no login and only 1 up instance;
 	# but the following does not work for 'native=False' 
 	# which makes sense in a web browser and without an 
 	# auth/login there's no way to stop that:
-	running = False
-	url = f"http://{HOST}:{PORT}/busy"
-	transport = httpx.HTTPTransport(retries=0) # disable retries entirely
-	try:
-		with httpx.Client(transport=transport) as client:
-			response = client.get(url)
-			if response.status_code == 200:
-				running = True
-			else:
-				pass
-	except httpx.RequestError:
-		pass
-	if running:
-		sys.exit(1)
+	# running = False
+	# url = f"http://{HOST}:{PORT}/busy"
+	# transport = httpx.HTTPTransport(retries=0) # disable retries entirely
+	# try:
+	# 	with httpx.Client(transport=transport) as client:
+	# 		response = client.get(url)
+	# 		if response.status_code == 200:
+	# 			running = True
+	# 		else:
+	# 			pass
+	# except httpx.RequestError:
+	# 	pass
+	# if running:
+	# 	sys.exit(1)
 
 	# print(f"__main__: os.environ:\n{os.environ}")
 
