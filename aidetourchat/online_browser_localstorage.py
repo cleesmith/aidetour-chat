@@ -49,9 +49,10 @@ PROVIDER_SETTINGS = [
 async def _main_page() -> None:
     global APP_SETTINGS, PROVIDER_SETTINGS
 
-    with ui.dialog().props('full-width') as dialog:
-        with ui.card():
-            content = ui.markdown()
+    def initialize_default_settings():
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
+        app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
 
     def read_settings_from_storage():
         global APP_SETTINGS, PROVIDER_SETTINGS
@@ -63,51 +64,58 @@ async def _main_page() -> None:
         PROVIDER_SETTINGS = app.storage.browser.get('PROVIDER_SETTINGS')
         return True
 
+    def get_app_setting(key):
+        global APP_SETTINGS
+        ic(key, APP_SETTINGS)
+        value = APP_SETTINGS[key]
+        return value
+
     def set_app_setting(key, value):
         global APP_SETTINGS
         ic(key, value)
         APP_SETTINGS[key] = value
-        app.storage.browser['app_settings'] = APP_SETTINGS
+        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
+
+    def get_provider_setting(provider_name, key):
+        global PROVIDER_SETTINGS
+        ic(provider_name, key)
+        for provider in PROVIDER_SETTINGS:
+            ic(provider, provider["name"])
+            if provider["name"] == provider_name:
+                value = provider["settings"][key]
+                return value
+        return None
 
     def set_provider_setting(provider_name, key, value):
         global PROVIDER_SETTINGS
-        ic(provider_name, key, value)
         for provider in PROVIDER_SETTINGS:
             if provider["name"] == provider_name:
-                provider["defaults"][key] = value
+                provider["settings"][key] = value
                 break
-        app.storage.browser.set('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
-
-    def get_provider_setting(provider, key):
-        global PROVIDER_SETTINGS
-        # ***************************************************
-        # fixme only get/set from global var not app.storage
-        # ***************************************************
-        provider_settings = app.storage.user.get('provider_settings', {})
-        if provider in provider_settings and key in provider_settings[provider]:
-            return provider_settings[provider][key]
-        return None
-
-    def initialize_default_settings():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
         app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
+        ic(PROVIDER_SETTINGS)
 
-        # set_app_setting('host', '127.0.0.1')
-        # set_app_setting('port', 8000)
-        # set_app_setting('dark_mode', True)
-
-        # for provider in PROVIDER_SETTINGS:
-        #     ic(provider)
-        #     name = provider['name']
-        #     defaults = provider['defaults']
-        #     set_provider_setting(name, 'api_key', "")
-        #     if 'base_url' in defaults:
-        #         set_provider_setting(name, 'base_url', defaults['base_url'])
-        #     if 'timeout' in defaults:
-        #         set_provider_setting(name, 'timeout', defaults['timeout'])
-        #     if 'max_tokens' in defaults:
-        #         set_provider_setting(name, 'max_tokens', defaults['max_tokens'])
+    def download_settings():
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        settings = {
+            'app_settings': APP_SETTINGS,
+            'provider_settings': PROVIDER_SETTINGS
+        }
+        content = json.dumps(settings)
+        ui.download(content.encode('utf-8'), 'clsSettings.json')
+        # b64_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+        # ui.run_javascript(f"""
+        #     const content = atob("{b64_content}");
+        #     const blob = new Blob([content], {{type: 'application/json'}});
+        #     const url = URL.createObjectURL(blob);
+        #     const a = document.createElement('a');
+        #     a.href = url;
+        #     a.download = 'settings.json';
+        #     document.body.appendChild(a);
+        #     a.click();
+        #     document.body.removeChild(a);
+        #     URL.revokeObjectURL(url);
+        # """)
 
     def upload_settings(e: events.UploadEventArguments):
         global APP_SETTINGS, PROVIDER_SETTINGS
@@ -126,50 +134,6 @@ async def _main_page() -> None:
         content.set_content(text)
         dialog.open()
 
-    def download_settings():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        # app_settings, provider_settings = read_settings_from_storage()
-        settings = {
-            'app_settings': APP_SETTINGS,
-            'provider_settings': PROVIDER_SETTINGS
-        }
-        content = json.dumps(settings, indent=4)
-
-        ui.download(content.encode('utf-8'), 'clsSettings.json')
-
-        # b64_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        # ui.run_javascript(f"""
-        #     const content = atob("{b64_content}");
-        #     const blob = new Blob([content], {{type: 'application/json'}});
-        #     const url = URL.createObjectURL(blob);
-        #     const a = document.createElement('a');
-        #     a.href = url;
-        #     a.download = 'settings.json';
-        #     document.body.appendChild(a);
-        #     a.click();
-        #     document.body.removeChild(a);
-        #     URL.revokeObjectURL(url);
-        # """)
-
-    def download_conversation():
-        content = "Sample AI conversation..."
-
-        ui.download(content.encode('utf-8'), 'cls.txt')
-
-        # b64_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        # ui.run_javascript(f"""
-        #     const content = atob("{b64_content}");
-        #     const blob = new Blob([content], {{type: 'text/plain'}});
-        #     const url = URL.createObjectURL(blob);
-        #     const a = document.createElement('a');
-        #     a.href = url;
-        #     a.download = 'ai_conversation.txt';
-        #     document.body.appendChild(a);
-        #     a.click();
-        #     document.body.removeChild(a);
-        #     URL.revokeObjectURL(url);
-        # """)
-
     ic(app.storage.browser['id'])
     ic(type(app.storage.browser))
     ic(app.storage.browser)
@@ -180,50 +144,37 @@ async def _main_page() -> None:
     # app.storage.browser.pop('APP_SETTINGS', None)
     # app.storage.browser.pop('PROVIDER_SETTINGS', None)
 
-    # ic(type(APP_SETTINGS), type(PROVIDER_SETTINGS), type(PROVIDER_SETTINGS[0]))
-    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
-
     found = read_settings_from_storage()
-    ic(found)
-    ic(APP_SETTINGS, PROVIDER_SETTINGS)
+    ic('read_settings_from_storage', found)
+    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
     ic(app.storage.browser)
 
-    # if not found:
-    #     initialize_default_settings()
-    #     ic(app.storage.browser)
+    if not found:
+        initialize_default_settings()
+        ic(app.storage.browser)
 
     # set_provider_setting('OpenRouter', 'timeout', 999)
+    # ic(app.storage.browser)
 
+    or_timeout = get_provider_setting('OpenRouter', 'timeout')
+    ic(or_timeout)
+    h = get_app_setting('host')
+    ic(h)
+
+    # gui/ui
     ui.button('Download Settings', on_click=download_settings)
-    ui.button('Download Conversation', on_click=download_conversation)
-
     ui.upload(on_upload=upload_settings).props('accept=.json').classes('max-w-full')
+    log = ui.log(max_lines=1500).classes('w-full h-full')
 
-
-    def edit_provider_settings():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        provider_settings = app.storage.user.get('provider_settings', [])
-        
-        for provider in PROVIDER_SETTINGS:
-            name = provider['name']  # Define 'name' before using it
-            defaults = provider['defaults']  # Define 'defaults' before using it
-            
-            current_settings = next(
-                (item for item in provider_settings if item['name'] == name),
-                defaults
-            )
-
-            with ui.dialog() as dialog:
-                with ui.card():
-                    ui.label(f'Edit settings for {name}')
-                    for key, value in defaults.items():
-                        current_value = current_settings.get(key, value)
-                        ui.input(f'{key}', value=current_value, on_change=lambda e, key=key, name=name: set_provider_setting(name, key, e.value))
-                    ui.button('Close', on_click=dialog.close)
-            dialog.open()
-
-    ui.button('Edit Provider Settings', on_click=edit_provider_settings)
-
+    # ias = ic(APP_SETTINGS)
+    # log.push(ias)
+    app_settings_str = json.dumps(APP_SETTINGS, indent=2) # readable
+    log.push("APP_SETTINGS:")
+    log.push(app_settings_str)
+    log.push(" ")
+    provider_settings_str = json.dumps(PROVIDER_SETTINGS, indent=2)
+    log.push("PROVIDER_SETTINGS:")
+    log.push(provider_settings_str)
 
 if __name__ == '__main__':
     ui.run(
