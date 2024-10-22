@@ -55,6 +55,8 @@ from groq import __version__ as gv
 
 from importlib.metadata import version, PackageNotFoundError
 
+from icecream import ic
+
 
 # determine where the images are for this app:
 if getattr(sys, 'frozen', False):
@@ -143,6 +145,7 @@ PROVIDERS_SETTINGS = [
 	{"name": "OpenRouter", "defaults": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
 	{"name": "Perplexity", "defaults": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30}},
 ]
+# ic(PROVIDERS_SETTINGS)
 
 APP_DB_SETTINGS = {}
 PROVIDER_DB_SETTINGS = defaultdict(dict)
@@ -1689,6 +1692,7 @@ async def _main_page(request: Request) -> None:
 		ui.notify("See full list of models by using Aidetour + Info.")
 
 def startup():
+	ic()
 	print(f"Welcome!\nAidetourChat personal server has started, see: http://{HOST}:{PORT} ")
 	print(f"in a web browser; your default browser should pop up automatically.")
 	print(f"\n*** WARNING!\nIf you quit your web browser before using the Quit button in AidetourChat, ")
@@ -1705,6 +1709,7 @@ def startup():
 
 def main():
 	try:
+		ic()
 		app.on_startup(startup)
 
 		read_settings_from_db()

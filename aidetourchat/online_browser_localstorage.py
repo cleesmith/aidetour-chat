@@ -2,6 +2,30 @@ from nicegui import app, ui, events
 import json
 import base64
 from collections import defaultdict
+from icecream import ic
+from cryptography.fernet import Fernet
+
+ic.configureOutput(includeContext=True, contextAbsPath=True)
+
+# this should be used only once outside of the app, then
+# used as the storage_secret and to encrypt/decrypt 'browser session cookie'
+# key = Fernet.generate_key()
+# ic(key)
+
+# similar to novelcrafter, all settings must go in a 'browser session cookie' 
+# note: users of the same browser on the same device get the same cookie,
+#       without auth/signin coding.
+# 
+# see: https://nicegui.io/documentation/storage#storage
+# app.storage.browser: 
+# Unlike the previous types, this dictionary is stored directly as the 
+# browser session cookie, shared among all browser tabs for the same user. 
+# However, app.storage.user is generally preferred due to its advantages in reducing 
+# data payload, enhancing security, and offering larger storage capacity. 
+# By default, NiceGUI holds a unique identifier for the browser session in 
+# app.storage.browser['id']. This storage is only available within 
+# page builder functions and requires the storage_secret parameter in ui.run() 
+# to sign the browser session cookie.
 
 APP_SETTINGS = {
     'host': '127.0.0.1',
@@ -30,20 +54,24 @@ async def _main_page() -> None:
 
     def read_settings_from_storage():
         global APP_SETTINGS, PROVIDER_SETTINGS
-        APP_SETTINGS = app.storage.user.get('app_settings', {})
-        PROVIDER_SETTINGS = app.storage.user.get('provider_settings', {})
+        app_settings = app.storage.browser.get('app_settings')
+        provider_settings = app.storage.browser.get('provider_settings')
+        if app_settings is None or provider_settings is None:
+            return False
+        APP_SETTINGS.update(app_settings)
+        PROVIDER_SETTINGS.update(provider_settings)
+        ic(APP_SETTINGS, PROVIDER_SETTINGS)
+        return True
 
     def set_app_setting(key, value):
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        # APP_SETTINGS = app.storage.user.get('app_settings', {})
+        global APP_SETTINGS
         APP_SETTINGS[key] = value
-        app.storage.user['app_settings'] = APP_SETTINGS
+        app.storage.browser['app_settings'] = APP_SETTINGS
+        ic(app.storage.browser)
 
     def set_provider_setting(provider_name, key, value):
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        print("set_provider_setting:")
-        print(provider_name, key, value)
-        print()
+        global PROVIDER_SETTINGS
+        ic(provider_name, key, value)
         # PROVIDER_SETTINGS = app.storage.user.get('provider_settings', {})
         # if provider not in PROVIDER_SETTINGS:
         #     PROVIDER_SETTINGS[provider] = {}
@@ -55,7 +83,7 @@ async def _main_page() -> None:
         app.storage.user['provider_settings'] = PROVIDER_SETTINGS
 
     def get_provider_setting(provider, key):
-        global APP_SETTINGS, PROVIDER_SETTINGS
+        global PROVIDER_SETTINGS
         provider_settings = app.storage.user.get('provider_settings', {})
         if provider in provider_settings and key in provider_settings[provider]:
             return provider_settings[provider][key]
@@ -65,7 +93,7 @@ async def _main_page() -> None:
         global APP_SETTINGS, PROVIDER_SETTINGS
         text = e.content.read().decode('utf-8')
         settings = json.loads(text)
-        print(f"\nsettings:\n{settings}\n")
+        ic(settings)
         if 'app_settings' in settings:
             app_settings = settings['app_settings']
             for key, value in app_settings.items():
@@ -80,14 +108,14 @@ async def _main_page() -> None:
 
     def initialize_default_settings():
         global APP_SETTINGS, PROVIDER_SETTINGS
+        app.storage.browser.pop('app_settings', None)
         set_app_setting('host', '127.0.0.1')
         set_app_setting('port', 8000)
         set_app_setting('dark_mode', True)
 
-        # PROVIDER_SETTINGS = defaultdict(dict)
-        print(f"initialize_default_settings: PROVIDER_SETTINGS:\n{PROVIDER_SETTINGS}")
+        app.storage.browser.pop('provider_settings', None)
         for provider in PROVIDER_SETTINGS:
-            print(f"provider={provider}")
+            ic(provider)
             name = provider['name']
             defaults = provider['defaults']
             set_provider_setting(name, 'api_key', "")
@@ -142,28 +170,24 @@ async def _main_page() -> None:
         #     URL.revokeObjectURL(url);
         # """)
 
-    print('before: read_settings_from_storage:')
-    print('APP_SETTINGS', APP_SETTINGS)
-    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
-    print()
-    # read_settings_from_storage()
-    # print('before: read_settings_from_storage:')
-    # print('APP_SETTINGS', APP_SETTINGS)
-    # print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
-    # print()
+    ic(app.storage.browser['id'])
+    ic(type(app.storage.browser))
+    ic(app.storage.browser)
 
-    print("app.storage.user:")
-    print(app.storage.user)
+    app.storage.browser.pop('app_settings', None)
+    app.storage.browser.pop('provider_settings', None)
 
-    print('before: initialize_default_settings:')
-    print('APP_SETTINGS', APP_SETTINGS)
-    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
-    print()
-    initialize_default_settings()
-    print('after: initialize_default_settings:')
-    print('APP_SETTINGS', APP_SETTINGS)
-    print('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
-    print()
+    # ic(type(APP_SETTINGS), type(PROVIDER_SETTINGS), type(PROVIDER_SETTINGS[0]))
+    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
+
+    found = read_settings_from_storage()
+    ic(found)
+    ic(APP_SETTINGS, PROVIDER_SETTINGS)
+    ic(app.storage.browser)
+
+    # initialize_default_settings()
+    # ic(app.storage.browser)
+    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
 
     ui.button('Download Settings', on_click=download_settings)
     ui.button('Download Conversation', on_click=download_conversation)
@@ -173,11 +197,16 @@ async def _main_page() -> None:
 
     def edit_provider_settings():
         global APP_SETTINGS, PROVIDER_SETTINGS
-        provider_settings = app.storage.user.get('provider_settings', {})
+        provider_settings = app.storage.user.get('provider_settings', [])
+        
         for provider in PROVIDER_SETTINGS:
-            name = provider['name']
-            defaults = provider['defaults']
-            current_settings = provider_settings.get(name, defaults)
+            name = provider['name']  # Define 'name' before using it
+            defaults = provider['defaults']  # Define 'defaults' before using it
+            
+            current_settings = next(
+                (item for item in provider_settings if item['name'] == name),
+                defaults
+            )
 
             with ui.dialog() as dialog:
                 with ui.card():
@@ -190,6 +219,7 @@ async def _main_page() -> None:
 
     ui.button('Edit Provider Settings', on_click=edit_provider_settings)
 
+
 if __name__ == '__main__':
     ui.run(
         host="127.0.0.1",
@@ -198,5 +228,31 @@ if __name__ == '__main__':
         reload=False,
         show_welcome_message=False,
         show=True,
+        dark=True,
         storage_secret='clsxxx',
     )
+
+
+# from nicegui import app
+# encrypt/decrypt browser session cookie data:
+# from cryptography.fernet import Fernet
+
+# # generate a key (should be done only once, and store it securely outside of the app!)
+# key = Fernet.generate_key()
+# cipher_suite = Fernet(key)
+
+# # encrypt the data before storing it
+# app_setting = "spud!"
+# encrypted_data = cipher_suite.encrypt(app_setting.encode()).decode()
+
+# # store the encrypted data in the browser
+# app.storage.browser['app_settings'] = encrypted_data
+
+# # later on, retrieve and decrypt the data
+# encrypted_data = app.storage.browser['app_settings']
+# decrypted_data = cipher_suite.decrypt(encrypted_data.encode()).decode()
+
+# # use the decrypted data
+# print(decrypted_data)  # Outputs: spud!
+
+
