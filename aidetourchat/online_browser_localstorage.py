@@ -1,4 +1,5 @@
 from nicegui import app, ui, events
+import sys
 import json
 import base64
 from collections import defaultdict
@@ -34,14 +35,14 @@ APP_SETTINGS = {
 }
 
 PROVIDER_SETTINGS = [
-    {"name": "Anthropic", "defaults": {"api_key": "", "max_tokens": 4096, "timeout": 30}},
-    {"name": "Google", "defaults": {"api_key": "", "timeout": 30}},
-    {"name": "Groq", "defaults": {"api_key": "", "timeout": 30}},
-    {"name": "LMStudio", "defaults": {"api_key": "", "base_url": "http://localhost:5506/v1", "timeout": 30}},
-    {"name": "Ollama", "defaults": {"api_key": "", "base_url": "http://localhost:11434", "timeout": 30}},
-    {"name": "OpenAI", "defaults": {"api_key": "", "timeout": 30}},
-    {"name": "OpenRouter", "defaults": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
-    {"name": "Perplexity", "defaults": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30}},
+    {"name": "Anthropic", "settings": {"api_key": "", "max_tokens": 4096, "timeout": 30}},
+    {"name": "Google", "settings": {"api_key": "", "timeout": 30}},
+    {"name": "Groq", "settings": {"api_key": "", "timeout": 30}},
+    {"name": "LMStudio", "settings": {"api_key": "", "base_url": "http://localhost:5506/v1", "timeout": 30}},
+    {"name": "Ollama", "settings": {"api_key": "", "base_url": "http://localhost:11434", "timeout": 30}},
+    {"name": "OpenAI", "settings": {"api_key": "", "timeout": 30}},
+    {"name": "OpenRouter", "settings": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
+    {"name": "Perplexity", "settings": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30}},
 ]
 
 @ui.page('/', response_timeout=999)
@@ -54,40 +55,59 @@ async def _main_page() -> None:
 
     def read_settings_from_storage():
         global APP_SETTINGS, PROVIDER_SETTINGS
-        app_settings = app.storage.browser.get('app_settings')
-        provider_settings = app.storage.browser.get('provider_settings')
+        app_settings = app.storage.browser.get('APP_SETTINGS', None)
+        provider_settings = app.storage.browser.get('PROVIDER_SETTINGS', None)
         if app_settings is None or provider_settings is None:
             return False
-        APP_SETTINGS.update(app_settings)
-        PROVIDER_SETTINGS.update(provider_settings)
-        ic(APP_SETTINGS, PROVIDER_SETTINGS)
+        APP_SETTINGS = app.storage.browser.get('APP_SETTINGS')
+        PROVIDER_SETTINGS = app.storage.browser.get('PROVIDER_SETTINGS')
         return True
 
     def set_app_setting(key, value):
         global APP_SETTINGS
+        ic(key, value)
         APP_SETTINGS[key] = value
         app.storage.browser['app_settings'] = APP_SETTINGS
-        ic(app.storage.browser)
 
     def set_provider_setting(provider_name, key, value):
         global PROVIDER_SETTINGS
         ic(provider_name, key, value)
-        # PROVIDER_SETTINGS = app.storage.user.get('provider_settings', {})
-        # if provider not in PROVIDER_SETTINGS:
-        #     PROVIDER_SETTINGS[provider] = {}
-        # PROVIDER_SETTINGS[provider][key] = value
         for provider in PROVIDER_SETTINGS:
-                if provider["name"] == provider_name:
-                    provider["defaults"][key] = value
-                    break
-        app.storage.user['provider_settings'] = PROVIDER_SETTINGS
+            if provider["name"] == provider_name:
+                provider["defaults"][key] = value
+                break
+        app.storage.browser.set('PROVIDER_SETTINGS', PROVIDER_SETTINGS)
 
     def get_provider_setting(provider, key):
         global PROVIDER_SETTINGS
+        # ***************************************************
+        # fixme only get/set from global var not app.storage
+        # ***************************************************
         provider_settings = app.storage.user.get('provider_settings', {})
         if provider in provider_settings and key in provider_settings[provider]:
             return provider_settings[provider][key]
         return None
+
+    def initialize_default_settings():
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
+        app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
+
+        # set_app_setting('host', '127.0.0.1')
+        # set_app_setting('port', 8000)
+        # set_app_setting('dark_mode', True)
+
+        # for provider in PROVIDER_SETTINGS:
+        #     ic(provider)
+        #     name = provider['name']
+        #     defaults = provider['defaults']
+        #     set_provider_setting(name, 'api_key', "")
+        #     if 'base_url' in defaults:
+        #         set_provider_setting(name, 'base_url', defaults['base_url'])
+        #     if 'timeout' in defaults:
+        #         set_provider_setting(name, 'timeout', defaults['timeout'])
+        #     if 'max_tokens' in defaults:
+        #         set_provider_setting(name, 'max_tokens', defaults['max_tokens'])
 
     def upload_settings(e: events.UploadEventArguments):
         global APP_SETTINGS, PROVIDER_SETTINGS
@@ -105,26 +125,6 @@ async def _main_page() -> None:
                     set_provider_setting(name, key, value)
         content.set_content(text)
         dialog.open()
-
-    def initialize_default_settings():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        app.storage.browser.pop('app_settings', None)
-        set_app_setting('host', '127.0.0.1')
-        set_app_setting('port', 8000)
-        set_app_setting('dark_mode', True)
-
-        app.storage.browser.pop('provider_settings', None)
-        for provider in PROVIDER_SETTINGS:
-            ic(provider)
-            name = provider['name']
-            defaults = provider['defaults']
-            set_provider_setting(name, 'api_key', "")
-            if 'base_url' in defaults:
-                set_provider_setting(name, 'base_url', defaults['base_url'])
-            if 'timeout' in defaults:
-                set_provider_setting(name, 'timeout', defaults['timeout'])
-            if 'max_tokens' in defaults:
-                set_provider_setting(name, 'max_tokens', defaults['max_tokens'])
 
     def download_settings():
         global APP_SETTINGS, PROVIDER_SETTINGS
@@ -174,8 +174,11 @@ async def _main_page() -> None:
     ic(type(app.storage.browser))
     ic(app.storage.browser)
 
-    app.storage.browser.pop('app_settings', None)
-    app.storage.browser.pop('provider_settings', None)
+    # empty/clear browser session cookie:
+    # app.storage.browser.pop('app_settings', None)
+    # app.storage.browser.pop('provider_settings', None)
+    # app.storage.browser.pop('APP_SETTINGS', None)
+    # app.storage.browser.pop('PROVIDER_SETTINGS', None)
 
     # ic(type(APP_SETTINGS), type(PROVIDER_SETTINGS), type(PROVIDER_SETTINGS[0]))
     # ic(APP_SETTINGS, PROVIDER_SETTINGS)
@@ -185,9 +188,11 @@ async def _main_page() -> None:
     ic(APP_SETTINGS, PROVIDER_SETTINGS)
     ic(app.storage.browser)
 
-    # initialize_default_settings()
-    # ic(app.storage.browser)
-    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
+    # if not found:
+    #     initialize_default_settings()
+    #     ic(app.storage.browser)
+
+    # set_provider_setting('OpenRouter', 'timeout', 999)
 
     ui.button('Download Settings', on_click=download_settings)
     ui.button('Download Conversation', on_click=download_conversation)

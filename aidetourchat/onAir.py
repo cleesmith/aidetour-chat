@@ -6,11 +6,6 @@ async def _main_page() -> None:
 Lorem Ipsum
 "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit..."
 "There is no one who loves pain itself, who seeks after it and wants to have it, simply because it is pain..."
-
-freestar
- 
-
-freestar
  
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec elit felis, dapibus quis enim vel, tincidunt pulvinar magna. Sed non quam in mauris efficitur dictum a quis dui. Nunc quis leo at lacus finibus tempor. Maecenas pulvinar vulputate egestas. Pellentesque aliquam nibh mollis, tristique augue sit amet, vulputate ipsum. Nunc sed dui magna. Praesent ex nunc, vestibulum quis condimentum non, euismod dictum ligula. Interdum et malesuada fames ac ante ipsum primis in faucibus. Mauris ac bibendum felis. Donec eget efficitur est. Integer ultricies, lectus a tristique bibendum, magna sapien dictum purus, sit amet ultrices justo mi in magna. Nunc et sollicitudin risus. Curabitur risus felis, fringilla eu mauris vitae, varius consequat felis. Quisque lobortis nec massa a pulvinar.
 
