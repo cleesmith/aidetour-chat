@@ -145,7 +145,6 @@ PROVIDERS_SETTINGS = [
 	{"name": "OpenRouter", "defaults": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
 	{"name": "Perplexity", "defaults": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30}},
 ]
-# ic(PROVIDERS_SETTINGS)
 
 APP_DB_SETTINGS = {}
 PROVIDER_DB_SETTINGS = defaultdict(dict)

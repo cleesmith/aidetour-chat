@@ -2,16 +2,10 @@ from nicegui import app, ui, events
 import sys
 import json
 import base64
-from collections import defaultdict
 from icecream import ic
 from cryptography.fernet import Fernet
 
 ic.configureOutput(includeContext=True, contextAbsPath=True)
-
-# this should be used only once outside of the app, then
-# used as the storage_secret and to encrypt/decrypt 'browser session cookie'
-# key = Fernet.generate_key()
-# ic(key)
 
 # similar to novelcrafter, all settings must go in a 'browser session cookie' 
 # note: users of the same browser on the same device get the same cookie,
@@ -34,138 +28,144 @@ APP_SETTINGS = {
     'dark_mode': True
 }
 
-PROVIDER_SETTINGS = [
-    {"name": "Anthropic", "settings": {"api_key": "", "max_tokens": 4096, "timeout": 30}},
-    {"name": "Google", "settings": {"api_key": "", "timeout": 30}},
-    {"name": "Groq", "settings": {"api_key": "", "timeout": 30}},
-    {"name": "LMStudio", "settings": {"api_key": "", "base_url": "http://localhost:5506/v1", "timeout": 30}},
-    {"name": "Ollama", "settings": {"api_key": "", "base_url": "http://localhost:11434", "timeout": 30}},
-    {"name": "OpenAI", "settings": {"api_key": "", "timeout": 30}},
-    {"name": "OpenRouter", "settings": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30}},
-    {"name": "Perplexity", "settings": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30}},
-]
+PROVIDER_SETTINGS = {
+    "Anthropic": {"api_key": "", "max_tokens": 4096, "timeout": 30},
+    "Google": {"api_key": "", "timeout": 30},
+    "Groq": {"api_key": "", "timeout": 30},
+    "LMStudio": {"api_key": "", "base_url": "http://localhost:5506/v1", "timeout": 30},
+    "Ollama": {"api_key": "", "base_url": "http://localhost:11434", "timeout": 30},
+    "OpenAI": {"api_key": "", "timeout": 30},
+    "OpenRouter": {"api_key": "", "base_url": "https://openrouter.ai/api/v1", "timeout": 30},
+    "Perplexity": {"api_key": "", "base_url": "https://api.perplexity.ai", "timeout": 30},
+}
 
 @ui.page('/', response_timeout=999)
 async def _main_page() -> None:
     global APP_SETTINGS, PROVIDER_SETTINGS
 
-    def initialize_default_settings():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
-        app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
+    # getter's and setters:
 
-    def read_settings_from_storage():
+    def get_app_storage_browser_settings():
         global APP_SETTINGS, PROVIDER_SETTINGS
         app_settings = app.storage.browser.get('APP_SETTINGS', None)
         provider_settings = app.storage.browser.get('PROVIDER_SETTINGS', None)
         if app_settings is None or provider_settings is None:
+            # i.e. globals will be the default settings not from cookie
             return False
         APP_SETTINGS = app.storage.browser.get('APP_SETTINGS')
         PROVIDER_SETTINGS = app.storage.browser.get('PROVIDER_SETTINGS')
         return True
 
+    def set_app_storage_browser_settings():
+        global APP_SETTINGS, PROVIDER_SETTINGS
+        app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
+        app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
+
     def get_app_setting(key):
-        global APP_SETTINGS
-        ic(key, APP_SETTINGS)
-        value = APP_SETTINGS[key]
-        return value
+        return APP_SETTINGS.get(key, "")
 
     def set_app_setting(key, value):
         global APP_SETTINGS
-        ic(key, value)
+        # always set the global as the current/master settings:
         APP_SETTINGS[key] = value
         app.storage.browser['APP_SETTINGS'] = APP_SETTINGS
 
     def get_provider_setting(provider_name, key):
-        global PROVIDER_SETTINGS
-        ic(provider_name, key)
-        for provider in PROVIDER_SETTINGS:
-            ic(provider, provider["name"])
-            if provider["name"] == provider_name:
-                value = provider["settings"][key]
-                return value
-        return None
+        return PROVIDER_SETTINGS.get(provider_name, {}).get(key, "")
 
     def set_provider_setting(provider_name, key, value):
         global PROVIDER_SETTINGS
-        for provider in PROVIDER_SETTINGS:
-            if provider["name"] == provider_name:
-                provider["settings"][key] = value
-                break
+        PROVIDER_SETTINGS[provider_name][key] = value
         app.storage.browser['PROVIDER_SETTINGS'] = PROVIDER_SETTINGS
-        ic(PROVIDER_SETTINGS)
 
     def download_settings():
         global APP_SETTINGS, PROVIDER_SETTINGS
         settings = {
-            'app_settings': APP_SETTINGS,
-            'provider_settings': PROVIDER_SETTINGS
+            'APP_SETTINGS': APP_SETTINGS,
+            'PROVIDER_SETTINGS': PROVIDER_SETTINGS
         }
         content = json.dumps(settings)
         ui.download(content.encode('utf-8'), 'clsSettings.json')
-        # b64_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        # ui.run_javascript(f"""
-        #     const content = atob("{b64_content}");
-        #     const blob = new Blob([content], {{type: 'application/json'}});
-        #     const url = URL.createObjectURL(blob);
-        #     const a = document.createElement('a');
-        #     a.href = url;
-        #     a.download = 'settings.json';
-        #     document.body.appendChild(a);
-        #     a.click();
-        #     document.body.removeChild(a);
-        #     URL.revokeObjectURL(url);
-        # """)
 
     def upload_settings(e: events.UploadEventArguments):
         global APP_SETTINGS, PROVIDER_SETTINGS
         text = e.content.read().decode('utf-8')
         settings = json.loads(text)
-        ic(settings)
-        if 'app_settings' in settings:
-            app_settings = settings['app_settings']
-            for key, value in app_settings.items():
-                set_app_setting(key, value)
-        if 'provider_settings' in settings:
-            provider_settings = settings['provider_settings']
-            for name, provider in provider_settings.items():
-                for key, value in provider.items():
-                    set_provider_setting(name, key, value)
-        content.set_content(text)
-        dialog.open()
+        if 'APP_SETTINGS' in settings:
+            APP_SETTINGS = settings['APP_SETTINGS']
+        if 'PROVIDER_SETTINGS' in settings:
+            PROVIDER_SETTINGS = settings['PROVIDER_SETTINGS']
+        set_app_storage_browser_settings()
 
     ic(app.storage.browser['id'])
-    ic(type(app.storage.browser))
-    ic(app.storage.browser)
 
-    # empty/clear browser session cookie:
+    # empty/clear 'browser session cookie':
     # app.storage.browser.pop('app_settings', None)
     # app.storage.browser.pop('provider_settings', None)
     # app.storage.browser.pop('APP_SETTINGS', None)
     # app.storage.browser.pop('PROVIDER_SETTINGS', None)
 
-    found = read_settings_from_storage()
-    ic('read_settings_from_storage', found)
-    # ic(APP_SETTINGS, PROVIDER_SETTINGS)
-    ic(app.storage.browser)
+    found = get_app_storage_browser_settings()
+    ic('get_app_storage_browser_settings', found, app.storage.browser)
 
     if not found:
-        initialize_default_settings()
+        set_app_storage_browser_settings()
         ic(app.storage.browser)
 
     # set_provider_setting('OpenRouter', 'timeout', 999)
-    # ic(app.storage.browser)
+    # ic('set_provider_setting', app.storage.browser)
 
-    or_timeout = get_provider_setting('OpenRouter', 'timeout')
-    ic(or_timeout)
-    h = get_app_setting('host')
-    ic(h)
+    # or_timeout = get_provider_setting('OpenRouter', 'timeout')
+    # ic(or_timeout)
+    # h = get_app_setting('host')
+    # ic(h)
 
-    # gui/ui
+    # ui=gui
     ui.button('Download Settings', on_click=download_settings)
     ui.upload(on_upload=upload_settings).props('accept=.json').classes('max-w-full')
-    log = ui.log(max_lines=1500).classes('w-full h-full')
 
+    # for provider in PROVIDER_SETTINGS:
+    for provider_name, settings in PROVIDER_SETTINGS.items():
+        with ui.expansion(provider_name).classes('w-full mb-2'):
+            with ui.column().classes('w-full'):
+                inputs = {}
+                inputs['api_key'] = ui.input(
+                    label='API Key', 
+                    password=True, 
+                    password_toggle_button=True, 
+                    value=get_provider_setting(provider_name, 'api_key')) \
+                .classes('w-full mb-2') \
+                .props("spellcheck=false") \
+                .props("autocomplete=off") \
+                .props("autocorrect=off")
+
+                inputs['timeout'] = ui.input(
+                    label='Timeout', 
+                    value=get_provider_setting(provider_name, 'timeout')) \
+                .classes('w-full mb-2') \
+                .props("spellcheck=false") \
+                .props("autocomplete=off") \
+                .props("autocorrect=off")
+
+                if provider_name in ['Ollama', 'OpenRouter', 'Perplexity', 'LMStudio']:
+                    inputs['base_url'] = ui.input(
+                        label='Base URL', 
+                        value=get_provider_setting(provider_name, 'base_url')) \
+                    .classes('w-full mb-2') \
+                    .props("spellcheck=false") \
+                    .props("autocomplete=off") \
+                    .props("autocorrect=off")
+
+                if provider_name == 'Anthropic':
+                    inputs['max_tokens'] = ui.input(
+                        label='Max Tokens', 
+                        value=get_provider_setting(provider_name, 'max_tokens')) \
+                    .classes('w-full mb-2') \
+                    .props("spellcheck=false") \
+                    .props("autocomplete=off") \
+                    .props("autocorrect=off")
+
+    log = ui.log(max_lines=1500).classes('w-full h-full')
     # ias = ic(APP_SETTINGS)
     # log.push(ias)
     app_settings_str = json.dumps(APP_SETTINGS, indent=2) # readable
@@ -194,7 +194,11 @@ if __name__ == '__main__':
 # from cryptography.fernet import Fernet
 
 # # generate a key (should be done only once, and store it securely outside of the app!)
+# this should be used only once outside of the app, then
+# used as the storage_secret and to encrypt/decrypt 'browser session cookie'
 # key = Fernet.generate_key()
+# ic(key)
+
 # cipher_suite = Fernet(key)
 
 # # encrypt the data before storing it
@@ -210,5 +214,4 @@ if __name__ == '__main__':
 
 # # use the decrypted data
 # print(decrypted_data)  # Outputs: spud!
-
 
