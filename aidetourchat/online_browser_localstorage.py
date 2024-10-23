@@ -124,7 +124,7 @@ async def _main_page() -> None:
     ui.button('Download Settings', on_click=download_settings)
     ui.upload(on_upload=upload_settings).props('accept=.json').classes('max-w-full')
 
-    # for provider in PROVIDER_SETTINGS:
+    provider_inputs = {}
     for provider_name, settings in PROVIDER_SETTINGS.items():
         with ui.expansion(provider_name).classes('w-full mb-2'):
             with ui.column().classes('w-full'):
@@ -165,6 +165,8 @@ async def _main_page() -> None:
                     .props("autocomplete=off") \
                     .props("autocorrect=off")
 
+                provider_inputs[provider_name] = inputs
+
     log = ui.log(max_lines=1500).classes('w-full h-full')
     # ias = ic(APP_SETTINGS)
     # log.push(ias)
@@ -175,6 +177,14 @@ async def _main_page() -> None:
     provider_settings_str = json.dumps(PROVIDER_SETTINGS, indent=2)
     log.push("PROVIDER_SETTINGS:")
     log.push(provider_settings_str)
+
+    log.push("provider inputs:")
+    for provider, inputs in provider_inputs.items():
+        for key, key_object in inputs.items():
+            log.push(f"{provider}: {key} = {key_object.value}")
+
+    ui.separator().props("size=4px color=primary") # insinuate bottom of settings
+
 
 if __name__ == '__main__':
     ui.run(
