@@ -5,6 +5,7 @@ from datetime import timedelta, datetime, timezone
 import sys
 import json
 import base64
+import asyncio
 from icecream import ic
 
 ic.configureOutput(includeContext=True, contextAbsPath=True)
@@ -30,74 +31,36 @@ PROVIDER_SETTINGS = {
 async def _main_page(request: Request) -> None:
     global APP_SETTINGS, PROVIDER_SETTINGS
     ic()
-    ic(request)
-    ic(request.session)
-    ic(request.state)
-    ic(request.headers)
-    ic(request.client)  # Shows client's IP address and port
-    ic(request.query_params)  # Print query parameters
-    ic(request.method)  # Print HTTP method (GET, POST, etc.)
-    ic(request.url)  # Print the full URL requested
+    # ic(request)
+    # ic(request.session)
+    # ic(request.state)
+    # ic(request.headers)
+    # ic(request.client)  # Shows client's IP address and port
+    # ic(request.query_params)  # Print query parameters
+    # ic(request.method)  # Print HTTP method (GET, POST, etc.)
+    # ic(request.url)  # Print the full URL requested
+    # ic('vars(request):')
+    # ic(vars(request))
+    # ic(dir(request))  # List all attributes and methods of request object
     ic(request.cookies)
-    ic('vars(request):')
-    ic(vars(request))
-    ic(dir(request))  # List all attributes and methods of request object
 
-    # Server-side: Function to retrieve settings from cookies
-    def get_settings_from_cookies(request: Request):
+    def get_settings_from_cookies(request) -> None:
         global APP_SETTINGS, PROVIDER_SETTINGS
+        # get cookies from the request
         app_settings_cookie = request.cookies.get('APP_SETTINGS')
+        ic('get_settings_from_cookies:', app_settings_cookie)
         provider_settings_cookie = request.cookies.get('PROVIDER_SETTINGS')
-
-        if app_settings_cookie:
+        if app_settings_cookie is not None:
             APP_SETTINGS = json.loads(app_settings_cookie)
-        if provider_settings_cookie:
+            ic(APP_SETTINGS)
+        if provider_settings_cookie is not None:
             PROVIDER_SETTINGS = json.loads(provider_settings_cookie)
-
-        return APP_SETTINGS, PROVIDER_SETTINGS
-
-    # Function to set custom cookies for settings with essentially "forever" max_age
-    def set_custom_cookies():
-        global APP_SETTINGS, PROVIDER_SETTINGS
-
-        # Serialize the settings to JSON for the cookie
-        app_settings_value = json.dumps(APP_SETTINGS)
-        provider_settings_value = json.dumps(PROVIDER_SETTINGS)
-
-        # Create the response object
-        response = JSONResponse(content={"message": "Settings saved with custom cookie settings"})
-
-        # Define custom max_age for essentially "forever" (e.g., 10 years)
-        max_age = 60 * 60 * 24 * 365 * 10  # 10 years in seconds
-        expires = datetime.now(timezone.utc) + timedelta(seconds=max_age)
-
-        # Set custom cookies for APP_SETTINGS and PROVIDER_SETTINGS
-        response.set_cookie(
-            key="APP_SETTINGS",
-            value=app_settings_value,
-            max_age=max_age,
-            expires=expires,
-            httponly=True,
-            samesite="lax"
-        )
-
-        response.set_cookie(
-            key="PROVIDER_SETTINGS",
-            value=provider_settings_value,
-            max_age=max_age,
-            expires=expires,
-            httponly=True,
-            samesite="lax"
-        )
-
-        return response
 
     def update_app_settings(key, value):
         global APP_SETTINGS
         APP_SETTINGS[key] = value
         ui.run_javascript(f'''setAppSettingsCookie("{APP_SETTINGS['host']}", "{APP_SETTINGS['port']}")''')
         ic('update_app_settings:', APP_SETTINGS)
-
 
     # empty/clear 'browser session cookie':
     # app.storage.browser.pop('app_settings', None)
@@ -106,18 +69,20 @@ async def _main_page(request: Request) -> None:
     # app.storage.browser.pop('PROVIDER_SETTINGS', None)
     # ic(app.storage.browser)
 
-    APP_SETTINGS, PROVIDER_SETTINGS = get_settings_from_cookies(request)
+    get_settings_from_cookies(request)
     ic(request)
     ic(APP_SETTINGS)
+    APP_SETTINGS = json.loads(APP_SETTINGS)
 
-    # Display current settings for the user to update
+    ic(APP_SETTINGS.get('host', ''))
+
+    # await asyncio.sleep(1.0)
     ui.input('Host', value=APP_SETTINGS.get('host', ''), on_change=lambda e: update_app_settings('host', e.value))
     ui.input('Port', value=APP_SETTINGS.get('port', 0), on_change=lambda e: update_app_settings('port', e.value))
 
-    # Inject JavaScript to set cookies client-side dynamically with a long max_age
+    # set cookies client-side dynamically with a longer max_age
     ui.add_body_html('''
     <script>
-        // extend existing cookie max-age by 1 year
         function extendCookieMaxAge(name, days) {
             // Get the current cookie value
             var nameEQ = name + "=";
@@ -126,7 +91,7 @@ async def _main_page(request: Request) -> None:
                 var c = ca[i];
                 while (c.charAt(0) == ' ') c = c.substring(1, c.length);
                 if (c.indexOf(nameEQ) == 0) {
-                    // Cookie exists, extend its max-age
+                    // cookie exists, extend its max-age
                     var value = c.substring(nameEQ.length, c.length);
                     var maxAge = days * 24 * 60 * 60; // Convert days to seconds
                     var expires = "; max-age=" + maxAge;
@@ -137,14 +102,12 @@ async def _main_page(request: Request) -> None:
             }
         }
 
-        // extend the max-age of specific settings cookies
         function extendSettingsCookies() {
             // Extend APP_SETTINGS and PROVIDER_SETTINGS cookies by 1 year (365 days)
             extendCookieMaxAge('APP_SETTINGS', 365);
             extendCookieMaxAge('PROVIDER_SETTINGS', 365);
         }
 
-        // set cookies with a long max_age (essentially forever)
         function setCookie(name, value, days) {
             var expires = "";
             if (days) {
@@ -154,13 +117,9 @@ async def _main_page(request: Request) -> None:
                 var maxAge = days * 24 * 60 * 60;  // Convert days to seconds
                 expires = "; max-age=" + maxAge;
             }
-            console.log(expires);
             document.cookie = name + "=" + (value || "") + expires + "; path=/; samesite=lax";
-            console.log(document.cookie);
         }
 
-
-        // set cookies for APP_SETTINGS with a very long expiration (e.g., 10 years)
         function setAppSettingsCookie(host, port) {
             var appSettingsValue = JSON.stringify({
                 'host': host,
@@ -169,7 +128,6 @@ async def _main_page(request: Request) -> None:
             setCookie('APP_SETTINGS', appSettingsValue, 400);
         }
 
-        // set cookies for PROVIDER_SETTINGS with a very long expiration (e.g., 10 years)
         function setProviderSettingsCookie() {
             var providerSettingsValue = JSON.stringify({
                 "OpenAI": {"api_key": "", "timeout": 30},
@@ -178,7 +136,7 @@ async def _main_page(request: Request) -> None:
             setCookie('PROVIDER_SETTINGS', providerSettingsValue, 400);
         }
 
-        // dynamically update the app settings cookie based on user input
+        /*
         document.querySelector('[name="Host"]').addEventListener('change', function(e) {
             var host = e.target.value;
             var port = document.querySelector('[name="Port"]').value;
@@ -190,10 +148,23 @@ async def _main_page(request: Request) -> None:
             var host = document.querySelector('[name="Host"]').value;
             setAppSettingsCookie(host, port);
         });
+        */
 
-        // initially set the cookies when the page loads
-        setAppSettingsCookie(document.querySelector('[name="Host"]').value, document.querySelector('[name="Port"]').value);
-        setProviderSettingsCookie();
+        const observer = new MutationObserver((mutations, observer) => {
+            if (document.querySelector('[name="Host"]') && document.querySelector('[name="Port"]')) {
+                setTimeout(() => {
+                    // Initially set the cookies when the desired elements are detected
+                    setAppSettingsCookie(document.querySelector('[name="Host"]').value, document.querySelector('[name="Port"]').value);
+                    setProviderSettingsCookie();
+                }, 300); // 300ms sleep
+                observer.disconnect(); // stop observing after running the function
+            }
+        });
+
+        observer.observe(document, {
+            childList: true,
+            subtree: true
+        });
     </script>
     ''')
 
